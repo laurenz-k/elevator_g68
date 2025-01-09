@@ -3,32 +3,50 @@ package main
 import (
 	"fmt"
 	"runtime"
-	"time"
 )
 
 var i = 0
 
 const iterationCount = 1000000
 
-func incrementing() {
+func incrementing(c chan int, quit chan int) {
 	for range iterationCount {
-		i++
+		c <- 1
 	}
+	quit <- 1
 }
 
-func decrementing() {
-	for range iterationCount - 1 {
-		i--
+func decrementing(c chan int, quit chan int) {
+	for range iterationCount {
+		c <- -1
 	}
+	quit <- 1
 }
 
 func main() {
 	// sets the max CPU cores used to 2 -> test different values to compare performance
 	runtime.GOMAXPROCS(2)
 
-	go incrementing()
-	go decrementing()
+	c := make(chan int)
+	quit := make(chan int)
 
-	time.Sleep(500 * time.Millisecond)
+	go incrementing(c, quit)
+	go decrementing(c, quit)
+
+	quitCount := 0
+
+loop:
+	for {
+		select {
+		case msg := <-c:
+			i += msg
+		case <-quit:
+			quitCount += 1
+			if quitCount >= 2 {
+				break loop
+			}
+		}
+	}
+
 	fmt.Println("The magic number is:", i)
 }

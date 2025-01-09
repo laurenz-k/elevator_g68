@@ -4,17 +4,22 @@
 #define ITERATION_COUNT 1000000
 
 int i = 0;
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void* incrementingThreadFunction(){
     for (int j = 0; j < ITERATION_COUNT; j++) {
+        pthread_mutex_lock(&mutex);
         i++;
+        pthread_mutex_unlock(&mutex);
     }
     return NULL;
 }
 
 void* decrementingThreadFunction(){
     for (int j = 0; j < ITERATION_COUNT; j++) {
+        pthread_mutex_lock(&mutex);
         i--;
+        pthread_mutex_unlock(&mutex);
     }
     return NULL;
 }

@@ -1,31 +1,34 @@
-// Use `go run foo.go` to run your program
-
 package main
 
 import (
-    . "fmt"
-    "runtime"
-    "time"
+	"fmt"
+	"runtime"
+	"time"
 )
 
 var i = 0
 
+const iterationCount = 1000000
+
 func incrementing() {
-    //TODO: increment i 1000000 times
+	for range iterationCount {
+		i++
+	}
 }
 
 func decrementing() {
-    //TODO: decrement i 1000000 times
+	for range iterationCount - 1 {
+		i--
+	}
 }
 
 func main() {
-    // What does GOMAXPROCS do? What happens if you set it to 1?
-    runtime.GOMAXPROCS(2)    
-	
-    // TODO: Spawn both functions as goroutines
-	
-    // We have no direct way to wait for the completion of a goroutine (without additional synchronization of some sort)
-    // We will do it properly with channels soon. For now: Sleep.
-    time.Sleep(500*time.Millisecond)
-    Println("The magic number is:", i)
+	// sets the max CPU cores used to 2 -> test different values to compare performance
+	runtime.GOMAXPROCS(2)
+
+	go incrementing()
+	go decrementing()
+
+	time.Sleep(500 * time.Millisecond)
+	fmt.Println("The magic number is:", i)
 }

@@ -1,1 +1,0 @@
-docker run -it --rm -p 15657:15657 elevator_sim

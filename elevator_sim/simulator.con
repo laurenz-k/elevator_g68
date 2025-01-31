@@ -1,11 +1,11 @@
 simulator.con
 
---travelTimeBetweenFloors_ms    2000
---travelTimePassingFloor_ms     500
---btnDepressedTime_ms           200
+--travelTimeBetweenFloors_ms    500
+--travelTimePassingFloor_ms     250
+--btnDepressedTime_ms           75
 --stopMotorOnDisconnect         true
 
---numFloors             4           // Minimum: 2, maximum: 9
+--numFloors             9           // Minimum: 2, maximum: 9
 
 --port                  15657
 

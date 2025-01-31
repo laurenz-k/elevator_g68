@@ -18,16 +18,16 @@ type MotorDirection int
 
 const (
 	MD_Up   MotorDirection = 1
-	MD_Down                = -1
-	MD_Stop                = 0
+	MD_Down MotorDirection = -1
+	MD_Stop MotorDirection = 0
 )
 
 type ButtonType int
 
 const (
 	BT_HallUp   ButtonType = 0
-	BT_HallDown            = 1
-	BT_Cab                 = 2
+	BT_HallDown ButtonType = 1
+	BT_Cab      ButtonType = 2
 )
 
 type ButtonEvent struct {
@@ -87,7 +87,7 @@ func PollButtons(receiver chan<- ButtonEvent) {
 }
 
 func PollFloorSensor(receiver chan<- int) {
-	prev := -1
+	prev := GetFloor()
 	for {
 		time.Sleep(_pollRate)
 		v := GetFloor()

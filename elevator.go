@@ -7,6 +7,14 @@ import (
 	elevio "elevator/elevio"
 )
 
+/*
+NOTE Laurenz
+- known issues: elevator dispatchment after stop not 100% as desired
+- cleanup idea: get buttons for movement direction => no more if/else => quick clear
+- maybe never set e.Direction to stop??
+- name state variables lowercase?
+*/
+
 type ElevatorState int
 
 const (
@@ -91,37 +99,7 @@ func (e *Elevator) handleButtonPress(b elevio.ButtonEvent) {
 			e.Direction = elevio.MD_Down
 			elevio.SetMotorDirection(e.Direction)
 		} else {
-			// TODO refactor into openDoor function
-			e.State = ST_DoorOpen
-			elevio.SetDoorOpenLamp(true)
-			for buttonType := 0; buttonType < len(e.Requests[e.CurrentFoor]); buttonType++ {
-				e.Requests[e.CurrentFoor][buttonType] = false
-				elevio.SetButtonLamp(elevio.ButtonType(buttonType), e.CurrentFoor, false)
-			}
-			time.AfterFunc(e.OpenDoorDuration, func() {
-				for e.DoorObstructed {
-					time.Sleep(20 * time.Millisecond)
-				}
-				// getNewDirection function
-				newDir := elevio.MD_Stop
-				if e.requestAbove() {
-					newDir = elevio.MD_Up
-				} else if e.requestBelow() {
-					newDir = elevio.MD_Down
-				}
-				// getNewDirection function
-
-				elevio.SetDoorOpenLamp(false)
-				if newDir != elevio.MD_Stop {
-					e.State = ST_Moving
-					e.Direction = newDir
-				} else {
-					e.State = ST_Idle
-					e.Direction = newDir
-				}
-				elevio.SetMotorDirection(e.Direction)
-			})
-			// TODO refactor into openDoor function
+			e.openAndCloseDoor()
 		}
 	case ST_Moving:
 		break
@@ -144,71 +122,7 @@ func (e *Elevator) handleFloorChange(floorNum int) {
 		elevio.SetFloorIndicator(floorNum)
 
 		if e.stopOnCurrentFloor() {
-			// TODO refactor into openDoor function
-			prevDir := e.Direction
-
-			e.State = ST_DoorOpen
-			e.Direction = elevio.MD_Stop
-			elevio.SetMotorDirection(e.Direction)
-			elevio.SetDoorOpenLamp(true)
-
-			// delete cab calls
-			e.Requests[e.CurrentFoor][elevio.BT_Cab] = false
-			elevio.SetButtonLamp(elevio.BT_Cab, e.CurrentFoor, false)
-
-			// delete same direction calls
-			var deleteOppDirRequests bool
-			if prevDir == elevio.MD_Up {
-				deleteOppDirRequests = !e.Requests[e.CurrentFoor][elevio.BT_HallUp]
-				e.Requests[e.CurrentFoor][elevio.BT_HallUp] = false
-				elevio.SetButtonLamp(elevio.BT_HallUp, e.CurrentFoor, false)
-			} else if prevDir == elevio.MD_Down {
-				deleteOppDirRequests = !e.Requests[e.CurrentFoor][elevio.BT_HallDown]
-				e.Requests[e.CurrentFoor][elevio.BT_HallDown] = false
-				elevio.SetButtonLamp(elevio.BT_HallDown, e.CurrentFoor, false)
-			}
-
-			// TODO cab call and opposite direction call => clear opposite direction calll
-			// TODO now dome intermediate calls also get deleted...
-
-			// delete opposite direction calls if it's the last stop in this direction
-			if deleteOppDirRequests { //  || e.CurrentFoor == len(e.Requests) || e.CurrentFoor == 0
-				if prevDir == elevio.MD_Up {
-					e.Requests[e.CurrentFoor][elevio.BT_HallDown] = false
-					elevio.SetButtonLamp(elevio.BT_HallDown, e.CurrentFoor, false)
-				} else if prevDir == elevio.MD_Down {
-					e.Requests[e.CurrentFoor][elevio.BT_HallUp] = false
-					elevio.SetButtonLamp(elevio.BT_HallUp, e.CurrentFoor, false)
-				}
-			}
-
-			// dispatch elevator again
-			time.AfterFunc(e.OpenDoorDuration, func() {
-				for e.DoorObstructed {
-					time.Sleep(20 * time.Millisecond)
-				}
-				elevio.SetDoorOpenLamp(false)
-
-				// keep same direction as long as there's requests in same direction left
-				if prevDir == elevio.MD_Up && e.requestAbove() {
-					e.State = ST_Moving
-					e.Direction = elevio.MD_Up
-				} else if prevDir == elevio.MD_Up && e.requestBelow() {
-					e.State = ST_Moving
-					e.Direction = elevio.MD_Down
-				} else if e.requestAbove() {
-					e.State = ST_Moving
-					e.Direction = elevio.MD_Up
-				} else if e.requestBelow() {
-					e.State = ST_Moving
-					e.Direction = elevio.MD_Down
-				} else {
-					e.State = ST_Idle
-					e.Direction = elevio.MD_Stop
-				}
-				elevio.SetMotorDirection(e.Direction)
-			})
-			// TODO refactor into openDoor function
+			e.openAndCloseDoor()
 		}
 
 	case ST_Idle:
@@ -236,6 +150,70 @@ func (e *Elevator) handleDoorObstruction(isObstructed bool) {
 
 func (e *Elevator) handleStopButton(isPressed bool) {
 	panic("Stop button not implemented")
+}
+
+func (e *Elevator) openAndCloseDoor() {
+	prevDir := e.Direction
+	e.State = ST_DoorOpen
+	e.Direction = elevio.MD_Stop
+	elevio.SetMotorDirection(e.Direction)
+
+	elevio.SetDoorOpenLamp(true)
+
+	// delete cab requests
+	e.Requests[e.CurrentFoor][elevio.BT_Cab] = false
+	elevio.SetButtonLamp(elevio.BT_Cab, e.CurrentFoor, false)
+
+	// delete same direction calls
+	if prevDir == elevio.MD_Up {
+		e.Requests[e.CurrentFoor][elevio.BT_HallUp] = false
+		elevio.SetButtonLamp(elevio.BT_HallUp, e.CurrentFoor, false)
+	} else if prevDir == elevio.MD_Down {
+		e.Requests[e.CurrentFoor][elevio.BT_HallDown] = false
+		elevio.SetButtonLamp(elevio.BT_HallDown, e.CurrentFoor, false)
+	} else {
+		e.Requests[e.CurrentFoor][elevio.BT_HallUp] = false
+		e.Requests[e.CurrentFoor][elevio.BT_HallDown] = false
+		elevio.SetButtonLamp(elevio.BT_HallUp, e.CurrentFoor, false)
+		elevio.SetButtonLamp(elevio.BT_HallDown, e.CurrentFoor, false)
+	}
+
+	// delete opposite direction calls iff there's no more unfilled requests in direction
+	if prevDir == elevio.MD_Up && !e.requestAbove() {
+		e.Requests[e.CurrentFoor][elevio.BT_HallDown] = false
+		elevio.SetButtonLamp(elevio.BT_HallDown, e.CurrentFoor, false)
+	} else if prevDir == elevio.MD_Down && !e.requestBelow() {
+		e.Requests[e.CurrentFoor][elevio.BT_HallUp] = false
+		elevio.SetButtonLamp(elevio.BT_HallUp, e.CurrentFoor, false)
+	}
+
+	// TODO issue => if opposite direction lights cleared but call from indirection while door open => keeps going up
+
+	time.AfterFunc(e.OpenDoorDuration, func() {
+		for e.DoorObstructed {
+			time.Sleep(20 * time.Millisecond)
+		}
+		elevio.SetDoorOpenLamp(false)
+
+		// keep same direction as long as there's requests in same direction left
+		if prevDir == elevio.MD_Up && e.requestAbove() {
+			e.State = ST_Moving
+			e.Direction = elevio.MD_Up
+		} else if prevDir == elevio.MD_Up && e.requestBelow() {
+			e.State = ST_Moving
+			e.Direction = elevio.MD_Down
+		} else if e.requestAbove() {
+			e.State = ST_Moving
+			e.Direction = elevio.MD_Up
+		} else if e.requestBelow() {
+			e.State = ST_Moving
+			e.Direction = elevio.MD_Down
+		} else {
+			e.State = ST_Idle
+			e.Direction = elevio.MD_Stop
+		}
+		elevio.SetMotorDirection(e.Direction)
+	})
 }
 
 func (e *Elevator) stopOnCurrentFloor() bool {

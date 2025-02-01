@@ -82,8 +82,7 @@ func (elevator *Elevator) Run() {
 func (e *Elevator) handleButtonPress(b elevio.ButtonEvent) {
 	glog.Info(fmt.Sprintf("Pressed button %+v\n", b))
 
-	e.requests[b.Floor][b.Button] = true
-	elevio.SetButtonLamp(b.Button, b.Floor, true)
+	e.addRequest(b)
 
 	switch e.state {
 	case ST_Idle:
@@ -103,8 +102,7 @@ func (e *Elevator) handleButtonPress(b elevio.ButtonEvent) {
 	case ST_DoorOpen:
 		// door open => clear button immediately
 		for buttonType := 0; buttonType < len(e.requests[e.currentFoor]); buttonType++ {
-			e.requests[e.currentFoor][buttonType] = false
-			elevio.SetButtonLamp(elevio.ButtonType(buttonType), e.currentFoor, false)
+			e.clearRequest(elevio.ButtonEvent{Floor: e.currentFoor, Button: elevio.ButtonType(buttonType)})
 		}
 	}
 }
@@ -149,39 +147,14 @@ func (e *Elevator) handleStopButton(isPressed bool) {
 }
 
 func (e *Elevator) openAndCloseDoor() {
-	prevDir := e.direction
+	prevDirection := e.direction
 	e.state = ST_DoorOpen
 	e.direction = elevio.MD_Stop
 	elevio.SetMotorDirection(e.direction)
 
 	elevio.SetDoorOpenLamp(true)
 
-	// delete cab requests
-	e.requests[e.currentFoor][elevio.BT_Cab] = false
-	elevio.SetButtonLamp(elevio.BT_Cab, e.currentFoor, false)
-
-	// delete same direction calls
-	if prevDir == elevio.MD_Up {
-		e.requests[e.currentFoor][elevio.BT_HallUp] = false
-		elevio.SetButtonLamp(elevio.BT_HallUp, e.currentFoor, false)
-	} else if prevDir == elevio.MD_Down {
-		e.requests[e.currentFoor][elevio.BT_HallDown] = false
-		elevio.SetButtonLamp(elevio.BT_HallDown, e.currentFoor, false)
-	} else if prevDir == elevio.MD_Stop {
-		e.requests[e.currentFoor][elevio.BT_HallUp] = false
-		e.requests[e.currentFoor][elevio.BT_HallDown] = false
-		elevio.SetButtonLamp(elevio.BT_HallUp, e.currentFoor, false)
-		elevio.SetButtonLamp(elevio.BT_HallDown, e.currentFoor, false)
-	}
-
-	// delete opposite direction calls iff there's no more unfilled requests in direction
-	if prevDir == elevio.MD_Up && !e.hasRequestAbove() {
-		e.requests[e.currentFoor][elevio.BT_HallDown] = false
-		elevio.SetButtonLamp(elevio.BT_HallDown, e.currentFoor, false)
-	} else if prevDir == elevio.MD_Down && !e.hasRequestBelow() {
-		e.requests[e.currentFoor][elevio.BT_HallUp] = false
-		elevio.SetButtonLamp(elevio.BT_HallUp, e.currentFoor, false)
-	}
+	e.clearFloorRequests(prevDirection)
 
 	time.AfterFunc(e.openDoorDuration, func() {
 		for e.doorObstructed {
@@ -189,23 +162,8 @@ func (e *Elevator) openAndCloseDoor() {
 		}
 		elevio.SetDoorOpenLamp(false)
 
-		// keep same direction as long as there's requests in same direction left
-		if prevDir == elevio.MD_Up && e.hasRequestAbove() {
-			e.state = ST_Moving
-			e.direction = elevio.MD_Up
-		} else if prevDir == elevio.MD_Down && e.hasRequestBelow() {
-			e.state = ST_Moving
-			e.direction = elevio.MD_Down
-		} else if e.hasRequestAbove() {
-			e.state = ST_Moving
-			e.direction = elevio.MD_Up
-		} else if e.hasRequestBelow() {
-			e.state = ST_Moving
-			e.direction = elevio.MD_Down
-		} else {
-			e.state = ST_Idle
-			e.direction = elevio.MD_Stop
-		}
+		e.setNextDirection(prevDirection)
+
 		elevio.SetMotorDirection(e.direction)
 	})
 }
@@ -260,4 +218,56 @@ func (e *Elevator) hasRequestBelow() bool {
 		}
 	}
 	return false
+}
+
+func (e *Elevator) addRequest(b elevio.ButtonEvent) {
+	e.requests[b.Floor][b.Button] = true
+	elevio.SetButtonLamp(b.Button, b.Floor, true)
+}
+
+func (e *Elevator) clearRequest(b elevio.ButtonEvent) {
+	e.requests[e.currentFoor][b.Button] = false
+	elevio.SetButtonLamp(elevio.ButtonType(b.Button), b.Floor, false)
+}
+
+func (e *Elevator) clearFloorRequests(d elevio.MotorDirection) {
+	// cab requests
+	e.clearRequest(elevio.ButtonEvent{Floor: e.currentFoor, Button: elevio.BT_Cab})
+
+	// same direction calls
+	if d == elevio.MD_Up {
+		e.clearRequest(elevio.ButtonEvent{Floor: e.currentFoor, Button: elevio.BT_HallUp})
+	} else if d == elevio.MD_Down {
+		e.clearRequest(elevio.ButtonEvent{Floor: e.currentFoor, Button: elevio.BT_HallDown})
+	} else if d == elevio.MD_Stop {
+		e.clearRequest(elevio.ButtonEvent{Floor: e.currentFoor, Button: elevio.BT_HallUp})
+		e.clearRequest(elevio.ButtonEvent{Floor: e.currentFoor, Button: elevio.BT_HallDown})
+	}
+
+	// opposite direction calls iff there's no more unfilled requests in direction
+	if d == elevio.MD_Up && !e.hasRequestAbove() {
+		e.clearRequest(elevio.ButtonEvent{Floor: e.currentFoor, Button: elevio.BT_HallDown})
+	} else if d == elevio.MD_Down && !e.hasRequestBelow() {
+		e.clearRequest(elevio.ButtonEvent{Floor: e.currentFoor, Button: elevio.BT_HallUp})
+	}
+}
+
+func (e *Elevator) setNextDirection(d elevio.MotorDirection) {
+	// keeps same direction as long as there's requests in same direction left
+	if d == elevio.MD_Up && e.hasRequestAbove() {
+		e.state = ST_Moving
+		e.direction = elevio.MD_Up
+	} else if d == elevio.MD_Down && e.hasRequestBelow() {
+		e.state = ST_Moving
+		e.direction = elevio.MD_Down
+	} else if e.hasRequestAbove() {
+		e.state = ST_Moving
+		e.direction = elevio.MD_Up
+	} else if e.hasRequestBelow() {
+		e.state = ST_Moving
+		e.direction = elevio.MD_Down
+	} else {
+		e.state = ST_Idle
+		e.direction = elevio.MD_Stop
+	}
 }

@@ -4,16 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	elevio "elevator/elevio"
-)
+	"elevator/elevio"
 
-/*
-NOTE Laurenz
-- known issues: elevator dispatchment after stop not 100% as desired
-- cleanup idea: get buttons for movement direction => no more if/else => quick clear
-- maybe never set e.Direction to stop??
-- name state variables lowercase?
-*/
+	"github.com/golang/glog"
+)
 
 type ElevatorState int
 
@@ -24,15 +18,15 @@ const (
 )
 
 type Elevator struct {
-	State            ElevatorState
-	CurrentFoor      int
-	Direction        elevio.MotorDirection
-	Requests         [][3]bool
-	OpenDoorDuration time.Duration
-	DoorObstructed   bool
+	state            ElevatorState
+	currentFoor      int
+	direction        elevio.MotorDirection
+	requests         [][3]bool
+	openDoorDuration time.Duration
+	doorObstructed   bool
 }
 
-func NewElevator(numFloors int, openDoorDuration time.Duration) Elevator {
+func NewElevator(numFloors int, openDoorDuration time.Duration) *Elevator {
 	elevio.Init("localhost:15657", numFloors)
 
 	betweenFloors := elevio.GetFloor() == -1
@@ -41,20 +35,23 @@ func NewElevator(numFloors int, openDoorDuration time.Duration) Elevator {
 		for elevio.GetFloor() == -1 {
 			time.Sleep(20 * time.Millisecond)
 		}
+		elevio.SetFloorIndicator(elevio.GetFloor())
 		elevio.SetMotorDirection(elevio.MD_Stop)
 	}
 
-	return Elevator{
-		State:            ST_Idle,
-		CurrentFoor:      elevio.GetFloor(),
-		Direction:        elevio.MD_Stop,
-		Requests:         make([][3]bool, numFloors),
-		OpenDoorDuration: openDoorDuration,
-		DoorObstructed:   false,
+	return &Elevator{
+		state:            ST_Idle,
+		currentFoor:      elevio.GetFloor(),
+		direction:        elevio.MD_Stop,
+		requests:         make([][3]bool, numFloors),
+		openDoorDuration: openDoorDuration,
+		doorObstructed:   false,
 	}
 }
 
 func (elevator *Elevator) Run() {
+	defer glog.Flush()
+
 	drv_buttons := make(chan elevio.ButtonEvent)
 	drv_floors := make(chan int)
 	drv_obstr := make(chan bool)
@@ -83,42 +80,41 @@ func (elevator *Elevator) Run() {
 }
 
 func (e *Elevator) handleButtonPress(b elevio.ButtonEvent) {
-	fmt.Printf("Pressed button %+v\n", b)
+	glog.Info(fmt.Sprintf("Pressed button %+v\n", b))
 
-	e.Requests[b.Floor][b.Button] = true
+	e.requests[b.Floor][b.Button] = true
 	elevio.SetButtonLamp(b.Button, b.Floor, true)
 
-	switch e.State {
+	switch e.state {
 	case ST_Idle:
-		if e.CurrentFoor < b.Floor {
-			e.State = ST_Moving
-			e.Direction = elevio.MD_Up
-			elevio.SetMotorDirection(e.Direction)
-		} else if e.CurrentFoor > b.Floor {
-			e.State = ST_Moving
-			e.Direction = elevio.MD_Down
-			elevio.SetMotorDirection(e.Direction)
+		if e.currentFoor < b.Floor {
+			e.state = ST_Moving
+			e.direction = elevio.MD_Up
+			elevio.SetMotorDirection(e.direction)
+		} else if e.currentFoor > b.Floor {
+			e.state = ST_Moving
+			e.direction = elevio.MD_Down
+			elevio.SetMotorDirection(e.direction)
 		} else {
 			e.openAndCloseDoor()
 		}
 	case ST_Moving:
 		break
 	case ST_DoorOpen:
-		// door is open, so any button press on current floor cleared immediately
-		// TODO maybe restart the 3 sec timer here?
-		for buttonType := 0; buttonType < len(e.Requests[e.CurrentFoor]); buttonType++ {
-			e.Requests[e.CurrentFoor][buttonType] = false
-			elevio.SetButtonLamp(elevio.ButtonType(buttonType), e.CurrentFoor, false)
+		// door open => clear button immediately
+		for buttonType := 0; buttonType < len(e.requests[e.currentFoor]); buttonType++ {
+			e.requests[e.currentFoor][buttonType] = false
+			elevio.SetButtonLamp(elevio.ButtonType(buttonType), e.currentFoor, false)
 		}
 	}
 }
 
 func (e *Elevator) handleFloorChange(floorNum int) {
-	fmt.Printf("floor changed %+v\n", floorNum)
+	glog.Info(fmt.Sprintf("floor changed %+v\n", floorNum))
 
-	switch e.State {
+	switch e.state {
 	case ST_Moving:
-		e.CurrentFoor = floorNum
+		e.currentFoor = floorNum
 		elevio.SetFloorIndicator(floorNum)
 
 		if e.stopOnCurrentFloor() {
@@ -134,11 +130,11 @@ func (e *Elevator) handleFloorChange(floorNum int) {
 }
 
 func (e *Elevator) handleDoorObstruction(isObstructed bool) {
-	fmt.Printf("Door obstruction %+v\n", isObstructed)
+	glog.Info("Door obstruction %+v\n", isObstructed)
 
-	switch e.State {
+	switch e.state {
 	case ST_DoorOpen:
-		e.DoorObstructed = isObstructed
+		e.doorObstructed = isObstructed
 
 	case ST_Moving:
 		panic("Door obstructed in state \"ST_Moving\"")
@@ -153,92 +149,90 @@ func (e *Elevator) handleStopButton(isPressed bool) {
 }
 
 func (e *Elevator) openAndCloseDoor() {
-	prevDir := e.Direction
-	e.State = ST_DoorOpen
-	e.Direction = elevio.MD_Stop
-	elevio.SetMotorDirection(e.Direction)
+	prevDir := e.direction
+	e.state = ST_DoorOpen
+	e.direction = elevio.MD_Stop
+	elevio.SetMotorDirection(e.direction)
 
 	elevio.SetDoorOpenLamp(true)
 
 	// delete cab requests
-	e.Requests[e.CurrentFoor][elevio.BT_Cab] = false
-	elevio.SetButtonLamp(elevio.BT_Cab, e.CurrentFoor, false)
+	e.requests[e.currentFoor][elevio.BT_Cab] = false
+	elevio.SetButtonLamp(elevio.BT_Cab, e.currentFoor, false)
 
 	// delete same direction calls
 	if prevDir == elevio.MD_Up {
-		e.Requests[e.CurrentFoor][elevio.BT_HallUp] = false
-		elevio.SetButtonLamp(elevio.BT_HallUp, e.CurrentFoor, false)
+		e.requests[e.currentFoor][elevio.BT_HallUp] = false
+		elevio.SetButtonLamp(elevio.BT_HallUp, e.currentFoor, false)
 	} else if prevDir == elevio.MD_Down {
-		e.Requests[e.CurrentFoor][elevio.BT_HallDown] = false
-		elevio.SetButtonLamp(elevio.BT_HallDown, e.CurrentFoor, false)
-	} else {
-		e.Requests[e.CurrentFoor][elevio.BT_HallUp] = false
-		e.Requests[e.CurrentFoor][elevio.BT_HallDown] = false
-		elevio.SetButtonLamp(elevio.BT_HallUp, e.CurrentFoor, false)
-		elevio.SetButtonLamp(elevio.BT_HallDown, e.CurrentFoor, false)
+		e.requests[e.currentFoor][elevio.BT_HallDown] = false
+		elevio.SetButtonLamp(elevio.BT_HallDown, e.currentFoor, false)
+	} else if prevDir == elevio.MD_Stop {
+		e.requests[e.currentFoor][elevio.BT_HallUp] = false
+		e.requests[e.currentFoor][elevio.BT_HallDown] = false
+		elevio.SetButtonLamp(elevio.BT_HallUp, e.currentFoor, false)
+		elevio.SetButtonLamp(elevio.BT_HallDown, e.currentFoor, false)
 	}
 
 	// delete opposite direction calls iff there's no more unfilled requests in direction
-	if prevDir == elevio.MD_Up && !e.requestAbove() {
-		e.Requests[e.CurrentFoor][elevio.BT_HallDown] = false
-		elevio.SetButtonLamp(elevio.BT_HallDown, e.CurrentFoor, false)
-	} else if prevDir == elevio.MD_Down && !e.requestBelow() {
-		e.Requests[e.CurrentFoor][elevio.BT_HallUp] = false
-		elevio.SetButtonLamp(elevio.BT_HallUp, e.CurrentFoor, false)
+	if prevDir == elevio.MD_Up && !e.hasRequestAbove() {
+		e.requests[e.currentFoor][elevio.BT_HallDown] = false
+		elevio.SetButtonLamp(elevio.BT_HallDown, e.currentFoor, false)
+	} else if prevDir == elevio.MD_Down && !e.hasRequestBelow() {
+		e.requests[e.currentFoor][elevio.BT_HallUp] = false
+		elevio.SetButtonLamp(elevio.BT_HallUp, e.currentFoor, false)
 	}
 
-	// TODO issue => if opposite direction lights cleared but call from indirection while door open => keeps going up
-
-	time.AfterFunc(e.OpenDoorDuration, func() {
-		for e.DoorObstructed {
+	time.AfterFunc(e.openDoorDuration, func() {
+		for e.doorObstructed {
 			time.Sleep(20 * time.Millisecond)
 		}
 		elevio.SetDoorOpenLamp(false)
 
 		// keep same direction as long as there's requests in same direction left
-		if prevDir == elevio.MD_Up && e.requestAbove() {
-			e.State = ST_Moving
-			e.Direction = elevio.MD_Up
-		} else if prevDir == elevio.MD_Up && e.requestBelow() {
-			e.State = ST_Moving
-			e.Direction = elevio.MD_Down
-		} else if e.requestAbove() {
-			e.State = ST_Moving
-			e.Direction = elevio.MD_Up
-		} else if e.requestBelow() {
-			e.State = ST_Moving
-			e.Direction = elevio.MD_Down
+		if prevDir == elevio.MD_Up && e.hasRequestAbove() {
+			e.state = ST_Moving
+			e.direction = elevio.MD_Up
+		} else if prevDir == elevio.MD_Down && e.hasRequestBelow() {
+			e.state = ST_Moving
+			e.direction = elevio.MD_Down
+		} else if e.hasRequestAbove() {
+			e.state = ST_Moving
+			e.direction = elevio.MD_Up
+		} else if e.hasRequestBelow() {
+			e.state = ST_Moving
+			e.direction = elevio.MD_Down
 		} else {
-			e.State = ST_Idle
-			e.Direction = elevio.MD_Stop
+			e.state = ST_Idle
+			e.direction = elevio.MD_Stop
 		}
-		elevio.SetMotorDirection(e.Direction)
+		elevio.SetMotorDirection(e.direction)
 	})
 }
 
 func (e *Elevator) stopOnCurrentFloor() bool {
 	// take all cab requests
-	if e.Requests[e.CurrentFoor][elevio.BT_Cab] {
+	if e.requests[e.currentFoor][elevio.BT_Cab] {
 		return true
 	}
 
-	if e.Direction == elevio.MD_Up {
+	if e.direction == elevio.MD_Up {
 		// take requests in same direction
-		if e.Requests[e.CurrentFoor][elevio.BT_HallUp] {
+		if e.requests[e.currentFoor][elevio.BT_HallUp] {
 			return true
 		}
 		// take requests in opposite direction iff no unanswered requests in same direction
-		if e.Requests[e.CurrentFoor][elevio.BT_HallDown] && !e.requestAbove() {
+		if e.requests[e.currentFoor][elevio.BT_HallDown] && !e.hasRequestAbove() {
 			return true
 		}
 
-	} else if e.Direction == elevio.MD_Down {
+	} else if e.direction == elevio.MD_Down {
 		// take requests in same direction
-		if e.Requests[e.CurrentFoor][elevio.BT_HallDown] {
+		if e.requests[e.currentFoor][elevio.BT_HallDown] {
 			return true
 		}
 		// take requests in opposite direction iff no unanswered requests in same direction
-		if e.Requests[e.CurrentFoor][elevio.BT_HallUp] && !e.requestBelow() {
+		if e.requests[e.currentFoor][elevio.BT_HallUp] && !e.hasRequestBelow() {
 			return true
 		}
 	}
@@ -246,10 +240,10 @@ func (e *Elevator) stopOnCurrentFloor() bool {
 	return false
 }
 
-func (e *Elevator) requestAbove() bool {
-	for floor := e.CurrentFoor + 1; floor < len(e.Requests); floor++ {
-		for buttonType := 0; buttonType < len(e.Requests[floor]); buttonType++ {
-			if e.Requests[floor][buttonType] {
+func (e *Elevator) hasRequestAbove() bool {
+	for floor := e.currentFoor + 1; floor < len(e.requests); floor++ {
+		for buttonType := 0; buttonType < len(e.requests[floor]); buttonType++ {
+			if e.requests[floor][buttonType] {
 				return true
 			}
 		}
@@ -257,10 +251,10 @@ func (e *Elevator) requestAbove() bool {
 	return false
 }
 
-func (e *Elevator) requestBelow() bool {
-	for floor := e.CurrentFoor - 1; floor > -1; floor-- {
-		for buttonType := 0; buttonType < len(e.Requests[floor]); buttonType++ {
-			if e.Requests[floor][buttonType] {
+func (e *Elevator) hasRequestBelow() bool {
+	for floor := e.currentFoor - 1; floor > -1; floor-- {
+		for buttonType := 0; buttonType < len(e.requests[floor]); buttonType++ {
+			if e.requests[floor][buttonType] {
 				return true
 			}
 		}

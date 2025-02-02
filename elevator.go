@@ -1,5 +1,11 @@
 package main
 
+/*
+NOTE Laurenz:
+- Strategy pattern to modularize request handling: `addRequest`, `stopOnCurrentFloor`, `getNewDirection`
+- Use pure function on event handlers to make code cleaner
+*/
+
 import (
 	"fmt"
 	"time"
@@ -100,10 +106,9 @@ func (e *Elevator) handleButtonPress(b elevio.ButtonEvent) {
 	case ST_Moving:
 		break
 	case ST_DoorOpen:
-		// door open => clear button immediately
-		for buttonType := 0; buttonType < len(e.requests[e.currentFoor]); buttonType++ {
-			e.clearRequest(elevio.ButtonEvent{Floor: e.currentFoor, Button: elevio.ButtonType(buttonType)})
-		}
+		e.clearRequest(elevio.ButtonEvent{Floor: e.currentFoor, Button: elevio.BT_Cab})
+		e.clearRequest(elevio.ButtonEvent{Floor: e.currentFoor, Button: elevio.BT_HallUp})
+		e.clearRequest(elevio.ButtonEvent{Floor: e.currentFoor, Button: elevio.BT_HallDown})
 	}
 }
 

@@ -7,12 +7,10 @@ NOTE Laurenz:
 */
 
 import (
-	"fmt"
+	"log"
 	"time"
 
 	"elevator/elevio"
-
-	"github.com/golang/glog"
 )
 
 type ElevatorState int
@@ -56,8 +54,6 @@ func NewElevator(numFloors int, openDoorDuration time.Duration) *Elevator {
 }
 
 func (elevator *Elevator) Run() {
-	defer glog.Flush()
-
 	drv_buttons := make(chan elevio.ButtonEvent)
 	drv_floors := make(chan int)
 	drv_obstr := make(chan bool)
@@ -86,7 +82,7 @@ func (elevator *Elevator) Run() {
 }
 
 func (e *Elevator) handleButtonPress(b elevio.ButtonEvent) {
-	glog.Info(fmt.Sprintf("Pressed button %+v\n", b))
+	log.Printf("Pressed button %+v\n", b)
 
 	e.addRequest(b)
 
@@ -113,7 +109,7 @@ func (e *Elevator) handleButtonPress(b elevio.ButtonEvent) {
 }
 
 func (e *Elevator) handleFloorChange(floorNum int) {
-	glog.Info(fmt.Sprintf("floor changed %+v\n", floorNum))
+	log.Printf("floor changed %+v\n", floorNum)
 
 	switch e.state {
 	case ST_Moving:
@@ -133,7 +129,7 @@ func (e *Elevator) handleFloorChange(floorNum int) {
 }
 
 func (e *Elevator) handleDoorObstruction(isObstructed bool) {
-	glog.Info("Door obstruction %+v\n", isObstructed)
+	log.Printf("Door obstruction %+v\n", isObstructed)
 
 	switch e.state {
 	case ST_DoorOpen:

@@ -1,0 +1,23 @@
+simulator.con
+
+--travelTimeBetweenFloors_ms    500
+--travelTimePassingFloor_ms     250
+--btnDepressedTime_ms           75
+--stopMotorOnDisconnect         true
+
+--numFloors             9           // Minimum: 2, maximum: 9
+
+--port                  15657
+
+--light_off             -
+--light_on              *
+
+--key_ordersUp          qwertzui    // 2 to 8 characters
+--key_ordersDown        sdfghjkl    // 2 to 8 characters
+--key_ordersCab         yxcvbnm,.   // 2 to 9 characters
+--key_stopButton        p
+--key_obstruction       -
+--key_moveUp            9
+--key_moveStop          8
+--key_moveDown          7
+--key_moveInbounds      0

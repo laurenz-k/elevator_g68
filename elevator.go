@@ -30,8 +30,8 @@ type Elevator struct {
 	doorObstructed   bool
 }
 
-func NewElevator(numFloors int, openDoorDuration time.Duration) *Elevator {
-	elevio.Init("elevator_sim_15657:15657", numFloors)
+func NewElevator(simulatorAddr string, numFloors int, openDoorDuration time.Duration) *Elevator {
+	elevio.Init(simulatorAddr, numFloors)
 
 	betweenFloors := elevio.GetFloor() == -1
 	if betweenFloors {

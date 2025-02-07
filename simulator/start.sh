@@ -1,20 +1,27 @@
 #!/bin/bash
 
-FIRST_PORT=15657
-NUM_ELEVATORS=2
+NUM_ELEVATORS=3
+NETWORK_NAME='simulation-network'
+SIMULATOR_NAME='elevator_simulator'
+CONTROLLER_NAME='elevator_controller'
 
-for port_num in $(seq $FIRST_PORT $((FIRST_PORT+NUM_ELEVATORS-1)));
+# Start elevators
+for id in $(seq 1 $((NUM_ELEVATORS)));
 do
-    cmd="docker run -it --init --rm -p $port_num:15657 --name elevator_sim_$port_num elevator_sim"
+    cmd_sim="docker run -it --init --rm --name ${SIMULATOR_NAME}_$id --network $NETWORK_NAME $SIMULATOR_NAME"
+    cmd_controller="docker run --rm --network $NETWORK_NAME --name ${CONTROLLER_NAME}_$id $CONTROLLER_NAME -addr ${SIMULATOR_NAME}_$id:15657"
 
     if [[ "$OSTYPE" == "darwin"* ]]; then
         # macos
-        osascript -e "tell app \"Terminal\" to do script \"$cmd\""
-        echo "Running at localhost:$port_num"
+        osascript -e "tell app \"Terminal\" to do script \"$cmd_sim\""
+        sleep 0.2s
+        osascript -e "tell app \"Terminal\" to do script \"$cmd_controller\""
 
     elif [[ "$OSTYPE" == "msys" ]]; then
         # Windows
-        start powershell -Command "$cmd"
+        start powershell -Command "$cmd_sim"
+        sleep 0.2s
+        start powershell -Command "$cmd_controller"
 
     else
         echo "Unsupported OS: $OSTYPE"

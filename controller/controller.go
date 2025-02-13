@@ -1,10 +1,4 @@
-package main
-
-/*
-NOTE Laurenz:
-- Strategy pattern to modularize request handling: `addRequest`, `stopOnCurrentFloor`, `getNewDirection`
-- Use pure function on event handlers to make code cleaner
-*/
+package controller
 
 import (
 	"log"

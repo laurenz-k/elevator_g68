@@ -1,6 +1,19 @@
 package statesync
 
-import "elevator/controller"
+import (
+	"elevator/controller"
+	"elevator/elevio"
+)
+
+type elevatorState struct {
+	id            uint8
+	nonce         uint32
+	currFloor     uint8
+	currDirection elevio.MotorDirection
+	request       [][2]bool
+}
+
+var states = make([][]elevatorState, 0, 10)
 
 func BroadcastState(elevatorPtr controller.Elevator) {
 	// TODO Laurenz

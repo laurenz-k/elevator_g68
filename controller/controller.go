@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"elevator/elevio"
+	sts "elevator/statesync"
 )
 
 type ElevatorState int
@@ -16,6 +17,7 @@ const (
 )
 
 type Elevator struct {
+	id               int
 	state            ElevatorState
 	currentFoor      int
 	direction        elevio.MotorDirection
@@ -25,6 +27,7 @@ type Elevator struct {
 }
 
 func NewElevator(simulatorAddr string, numFloors int, openDoorDuration time.Duration) *Elevator {
+	// TODO laurenz-k initialized ID
 	elevio.Init(simulatorAddr, numFloors)
 
 	betweenFloors := elevio.GetFloor() == -1
@@ -57,6 +60,9 @@ func (elevator *Elevator) Run() {
 	go elevio.PollFloorSensor(drv_floors)
 	go elevio.PollObstructionSwitch(drv_obstr)
 	go elevio.PollStopButton(drv_stop)
+
+	go sts.ReceiveStates()
+	go sts.BroadcastState(elevator)
 
 	for {
 		select {

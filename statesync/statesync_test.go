@@ -4,6 +4,7 @@ import (
 	"elevator/elevio"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestSerializeDeserialize(t *testing.T) {
@@ -45,5 +46,40 @@ func TestSerializeDeserialize(t *testing.T) {
 		if !reflect.DeepEqual(input, deserialized) {
 			t.Errorf("Deserialized `elevatorState` does not match original.\nOriginal: %+v\nDeserialized: %+v", input, deserialized)
 		}
+	}
+}
+
+func TestUpdateStates(t *testing.T) {
+	initState := elevatorState{
+		id:            2,
+		nonce:         0,
+		currFloor:     4,
+		currDirection: elevio.MD_Down,
+		request:       [][2]bool{{true, false}, {false, false}},
+		lastSync:      time.Now(),
+	}
+	endState := elevatorState{
+		id:            2,
+		nonce:         5,
+		currFloor:     5,
+		currDirection: elevio.MD_Down,
+		request:       [][2]bool{{true, false}, {false, false}},
+		lastSync:      time.Now(),
+	}
+	staleState := elevatorState{
+		id:            2,
+		nonce:         2, // old nonce not applied
+		currFloor:     0,
+		currDirection: elevio.MD_Down,
+		request:       [][2]bool{{true, false}, {false, false}},
+		lastSync:      time.Now(),
+	}
+
+	updateStates(&initState)
+	updateStates(&endState)
+	updateStates(&staleState)
+
+	if !reflect.DeepEqual(*states[2], endState) {
+		t.Errorf("Invalid state after applying updates")
 	}
 }

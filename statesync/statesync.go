@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+// TODO: Add a way to re-sync an elevator if it has been offline or out of sync for a while
+
 const broadcastAddr = "255.255.255.255"
 const broadcastPort = "15001"
 const interval = 100 * time.Millisecond
@@ -22,7 +24,7 @@ var states = make([]*elevatorState, 0, 10)
 
 // ButtonPressChan is used to notify the controller to reassign orders
 // when an elevator is detected as failed.
-var ButtonPressChan chan elevio.ButtonEvent
+// var ButtonPressChan chan elevio.ButtonEvent
 
 type elevatorState struct {
 	id            uint8
@@ -33,6 +35,11 @@ type elevatorState struct {
 	lastSync      time.Time
 }
 
+/**
+ * @brief Broadcasts the elevator's state over UDP at regular intervals.
+ *
+ * @param elevatorPtr The current state of the elevator to broadcast.
+ */
 func BroadcastState(elevatorPtr types.ElevatorState) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -57,6 +64,9 @@ func BroadcastState(elevatorPtr types.ElevatorState) {
 	}
 }
 
+/**
+ * @brief Listens for incoming elevator states over UDP and updates local states.
+ */
 func ReceiveStates() {
 	addr, _ := net.ResolveUDPAddr("udp", ":"+broadcastPort)
 	conn, _ := net.ListenUDP("udp", addr)
@@ -72,9 +82,9 @@ func ReceiveStates() {
 	}
 }
 
-// MonitorFailedSyncs iterates through the stored states every second.
-// If an elevator has not sent an update within syncTimeout,
-// its orders are reassigned via ButtonPressChan.
+/**
+ * @brief Monitors elevator states and reassigns orders if an elevator is out of sync.
+ */
 func MonitorFailedSyncs() {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
@@ -110,8 +120,12 @@ func MonitorFailedSyncs() {
 	}
 }
 
-// GetState returns the stored state for the elevator with the given id.
-// Returns nil if no such state exists.
+/**
+ * @brief Retrieves the stored state of the given elevator.
+ *
+ * @param elevatorID The ID of the elevator.
+ * @return Pointer to the elevatorState, or nil if not found.
+ */
 func GetState(elevatorID int) *elevatorState {
 	mtx.RLock()
 	defer mtx.RUnlock()
@@ -121,8 +135,11 @@ func GetState(elevatorID int) *elevatorState {
 	return nil
 }
 
-// GetAliveElevatorIDs returns a slice of elevator ids for which
-// a state update has been received within syncTimeout.
+/**
+ * @brief Gets the IDs of all elevators that have synced within the timeout.
+ *
+ * @return A slice of active elevator IDs.
+ */
 func GetAliveElevatorIDs() []int {
 	mtx.RLock()
 	defer mtx.RUnlock()
@@ -136,6 +153,12 @@ func GetAliveElevatorIDs() []int {
 	return alive
 }
 
+/**
+ * @brief Serializes an elevatorState into a byte slice.
+ *
+ * @param s The elevator state to serialize.
+ * @return A byte slice representing the serialized state.
+ */
 func serialize(s elevatorState) []byte {
 	buf := make([]byte, 0, 128)
 
@@ -157,6 +180,12 @@ func serialize(s elevatorState) []byte {
 	return buf
 }
 
+/**
+ * @brief Deserializes a byte slice into an elevatorState.
+ *
+ * @param m The byte slice containing serialized elevator state data.
+ * @return Pointer to the deserialized elevatorState.
+ */
 func deserialize(m []byte) *elevatorState {
 	elevatorState := &elevatorState{
 		id:            m[0],
@@ -175,6 +204,11 @@ func deserialize(m []byte) *elevatorState {
 	return elevatorState
 }
 
+/**
+ * @brief Updates the stored state of an elevator.
+ *
+ * @param s The new state of the elevator.
+ */
 func updateStates(s *elevatorState) {
 	mtx.Lock()
 	defer mtx.Unlock()

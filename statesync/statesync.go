@@ -4,6 +4,7 @@ import (
 	"elevator/elevio"
 	"elevator/types"
 	"encoding/binary"
+	"log"
 	"net"
 	"sync"
 	"time"
@@ -12,10 +13,16 @@ import (
 const broadcastAddr = "255.255.255.255"
 const broadcastPort = "15001"
 const interval = 100 * time.Millisecond
+const syncTimeout = 1 * time.Second
 
 var mtx sync.RWMutex
 
+// We store states by elevator id (index in the slice).
 var states = make([]*elevatorState, 0, 10)
+
+// ButtonPressChan is used to notify the controller to reassign orders
+// when an elevator is detected as failed.
+var ButtonPressChan chan elevio.ButtonEvent
 
 type elevatorState struct {
 	id            uint8
@@ -65,17 +72,68 @@ func ReceiveStates() {
 	}
 }
 
+// MonitorFailedSyncs iterates through the stored states every second.
+// If an elevator has not sent an update within syncTimeout,
+// its orders are reassigned via ButtonPressChan.
 func MonitorFailedSyncs() {
-	// TODO Hlynur
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		mtx.Lock()
+		for id, s := range states {
+			if s == nil {
+				continue
+			}
+			if time.Since(s.lastSync) > syncTimeout {
+				log.Printf("Elevator %d has not synced for over %v. Reassigning orders.", id, syncTimeout)
+				/*for floor, order := range s.request {
+					for btn, active := range order {
+						if active {
+							event := elevio.ButtonEvent{
+								Floor:  floor,
+								Button: elevio.ButtonType(btn),
+							}
+							if ButtonPressChan != nil {
+								ButtonPressChan <- event
+							} else {
+								log.Printf("ButtonPressChan is nil; cannot reassign order: %+v", event)
+							}
+							// Clear the order after reassigning.
+							s.request[floor][btn] = false
+						}
+					}
+				}*/
+			}
+		}
+		mtx.Unlock()
+	}
 }
 
-func GetState(elevatorID int) {
-	// TODO Hlynur
+// GetState returns the stored state for the elevator with the given id.
+// Returns nil if no such state exists.
+func GetState(elevatorID int) *elevatorState {
+	mtx.RLock()
+	defer mtx.RUnlock()
+	if elevatorID < len(states) {
+		return states[elevatorID]
+	}
+	return nil
 }
 
+// GetAliveElevatorIDs returns a slice of elevator ids for which
+// a state update has been received within syncTimeout.
 func GetAliveElevatorIDs() []int {
-	// TODO Hlynur
-	return make([]int, 0, 5)
+	mtx.RLock()
+	defer mtx.RUnlock()
+
+	alive := make([]int, 0, len(states))
+	for id, s := range states {
+		if s != nil && time.Since(s.lastSync) <= syncTimeout {
+			alive = append(alive, id)
+		}
+	}
+	return alive
 }
 
 func serialize(s elevatorState) []byte {

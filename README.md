@@ -25,3 +25,7 @@ Listens for incoming state updates and updates the state of other elevators.
 Runs periodically (every 1 second) to detect elevators that haven't shared their state in the last second. If this is the case we reassign all of the failed elevators requests. 
 Since in theory multiple elevators could recognize the failure at the same time which might lead to a scenario where an order is assigned to multiple other elevators. While this is not ideal it does not violate the service guarantee since at least one elevator will take over the order. 
 We are considering adapting the reassignment scheme such that first an elevator waits a random time and then checks if the order has already been reassigned by another elevator. If it has not been reassigned yet we can assume that this elevator is the first to reassign. 
+
+
+## Open Questions
+- Do we need the cyclic counters presented in lectures for this solution? We believe not, since in our implementation each elevator manages it's own state. Other elevators only have read access to it so no inconsistencies can occur.

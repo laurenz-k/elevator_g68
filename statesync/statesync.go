@@ -223,3 +223,24 @@ func updateStates(s *elevatorState) {
 		states[id] = s
 	}
 }
+
+// Potential issue: If the elevator has been offline for too long, a direct state request might time out.
+// Consider implementing a retry mechanism or fallback to a safe state.
+//
+// ResyncElevatorState should be triggered when an elevator is detected to be out of sync.
+func ResyncElevatorState(elevatorID int) {
+	// TODO:
+	// 1. Broadcast a state request for the specified elevator.
+	// 2. Wait for responses from peers or the master node.
+	// 3. If a valid state is received, update the local state accordingly.
+	// 4. If no response is received within a timeout, mark the elevator as offline and trigger order reassignments.
+}
+
+// Helps with improving error checking for receiving and processing state messages over UDP.
+// (Not sure if this is needed but can be nice for testing at least, so we dont try to fix something that not broken)
+func HandleStateReception() {
+	// TODO:
+	// 1. In the ReceiveStates loop, check for errors on conn.Read.
+	// 2. If an error occurs, log it and possibly break the loop or retry.
+	// 3. Validate the length of the received data before attempting deserialization.
+}

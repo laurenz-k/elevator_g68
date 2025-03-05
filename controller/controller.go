@@ -4,70 +4,38 @@ import (
 	"log"
 	"time"
 
+	asg "elevator/assigner"
 	"elevator/elevio"
 	sts "elevator/statesync"
 )
 
-type ElevatorState int
+func StartControlLoop(id int, driverAddr string, numFloors int) {
 
-const (
-	ST_Idle     ElevatorState = 0
-	ST_Moving   ElevatorState = 1
-	ST_DoorOpen ElevatorState = 2
-)
+	elevator := setup(id, driverAddr, numFloors)
 
-type Elevator struct {
-	id               int
-	state            ElevatorState
-	currentFoor      int
-	direction        elevio.MotorDirection
-	requests         [][3]bool
-	openDoorDuration time.Duration
-	doorObstructed   bool
-}
-
-func NewElevator(simulatorAddr string, numFloors int, openDoorDuration time.Duration) *Elevator {
-	// TODO laurenz-k initialized ID
-	elevio.Init(simulatorAddr, numFloors)
-
-	betweenFloors := elevio.GetFloor() == -1
-	if betweenFloors {
-		elevio.SetMotorDirection(elevio.MD_Up)
-		for elevio.GetFloor() == -1 {
-			time.Sleep(20 * time.Millisecond)
-		}
-		elevio.SetFloorIndicator(elevio.GetFloor())
-		elevio.SetMotorDirection(elevio.MD_Stop)
-	}
-
-	return &Elevator{
-		state:            ST_Idle,
-		currentFoor:      elevio.GetFloor(),
-		direction:        elevio.MD_Stop,
-		requests:         make([][3]bool, numFloors),
-		openDoorDuration: openDoorDuration,
-		doorObstructed:   false,
-	}
-}
-
-func (elevator *Elevator) Run() {
 	drv_buttons := make(chan elevio.ButtonEvent)
 	drv_floors := make(chan int)
 	drv_obstr := make(chan bool)
 	drv_stop := make(chan bool)
+	asg_buttons := make(chan elevio.ButtonEvent)
+
+	go sts.BroadcastState(elevator)
+	go sts.ReceiveStates()
+	go sts.MonitorFailedSyncs()
 
 	go elevio.PollButtons(drv_buttons)
 	go elevio.PollFloorSensor(drv_floors)
 	go elevio.PollObstructionSwitch(drv_obstr)
 	go elevio.PollStopButton(drv_stop)
-
-	go sts.ReceiveStates()
-	go sts.BroadcastState(elevator)
+	go asg.ReceiveAssignments(asg_buttons, id)
 
 	for {
 		select {
 		case a := <-drv_buttons:
 			elevator.handleButtonPress(a)
+
+		case a := <-asg_buttons:
+			elevator.addRequest(a)
 
 		case a := <-drv_floors:
 			elevator.handleFloorChange(a)
@@ -81,18 +49,51 @@ func (elevator *Elevator) Run() {
 	}
 }
 
-func (e *Elevator) handleButtonPress(b elevio.ButtonEvent) {
+func setup(id int, driverAddr string, numFloors int) *elevator {
+	elevio.Init(driverAddr, numFloors)
+
+	betweenFloors := elevio.GetFloor() == -1
+	if betweenFloors {
+		elevio.SetMotorDirection(elevio.MD_Up)
+		for elevio.GetFloor() == -1 {
+			time.Sleep(20 * time.Millisecond)
+		}
+		elevio.SetMotorDirection(elevio.MD_Stop)
+	}
+	elevio.SetFloorIndicator(elevio.GetFloor())
+
+	elevator := &elevator{
+		id:             id,
+		state:          ST_Idle,
+		floor:          elevio.GetFloor(),
+		direction:      elevio.MD_Stop,
+		requests:       make([][3]bool, numFloors),
+		doorObstructed: false,
+	}
+	elevator.setAllLights()
+	return elevator
+}
+
+func (e *elevator) handleButtonPress(b elevio.ButtonEvent) {
 	log.Printf("Pressed button %+v\n", b)
 
-	e.addRequest(b)
+	if b.Button == elevio.BT_Cab {
+		e.addRequest(b)
+	} else {
+		asg.Assign(b)
+	}
+}
+
+func (e *elevator) addRequest(b elevio.ButtonEvent) {
+	e.requests[b.Floor][b.Button] = true
 
 	switch e.state {
 	case ST_Idle:
-		if e.currentFoor < b.Floor {
+		if e.floor < b.Floor {
 			e.state = ST_Moving
 			e.direction = elevio.MD_Up
 			elevio.SetMotorDirection(e.direction)
-		} else if e.currentFoor > b.Floor {
+		} else if e.floor > b.Floor {
 			e.state = ST_Moving
 			e.direction = elevio.MD_Down
 			elevio.SetMotorDirection(e.direction)
@@ -102,18 +103,20 @@ func (e *Elevator) handleButtonPress(b elevio.ButtonEvent) {
 	case ST_Moving:
 		break
 	case ST_DoorOpen:
-		e.clearRequest(elevio.ButtonEvent{Floor: e.currentFoor, Button: elevio.BT_Cab})
-		e.clearRequest(elevio.ButtonEvent{Floor: e.currentFoor, Button: elevio.BT_HallUp})
-		e.clearRequest(elevio.ButtonEvent{Floor: e.currentFoor, Button: elevio.BT_HallDown})
+		e.requests[e.floor][elevio.BT_Cab] = false
+		e.requests[e.floor][elevio.BT_HallUp] = false
+		e.requests[e.floor][elevio.BT_HallDown] = false
 	}
+
+	e.setAllLights()
 }
 
-func (e *Elevator) handleFloorChange(floorNum int) {
+func (e *elevator) handleFloorChange(floorNum int) {
 	log.Printf("floor changed %+v\n", floorNum)
 
 	switch e.state {
 	case ST_Moving:
-		e.currentFoor = floorNum
+		e.floor = floorNum
 		elevio.SetFloorIndicator(floorNum)
 
 		if e.stopOnCurrentFloor() {
@@ -128,7 +131,7 @@ func (e *Elevator) handleFloorChange(floorNum int) {
 	}
 }
 
-func (e *Elevator) handleDoorObstruction(isObstructed bool) {
+func (e *elevator) handleDoorObstruction(isObstructed bool) {
 	log.Printf("Door obstruction %+v\n", isObstructed)
 
 	switch e.state {
@@ -143,11 +146,10 @@ func (e *Elevator) handleDoorObstruction(isObstructed bool) {
 	}
 }
 
-func (e *Elevator) handleStopButton(isPressed bool) {
-	panic("Stop button not implemented")
+func (e *elevator) handleStopButton(isPressed bool) {
 }
 
-func (e *Elevator) openAndCloseDoor() {
+func (e *elevator) openAndCloseDoor() {
 	prevDirection := e.direction
 	e.state = ST_DoorOpen
 	e.direction = elevio.MD_Stop
@@ -157,7 +159,9 @@ func (e *Elevator) openAndCloseDoor() {
 
 	e.clearFloorRequests(prevDirection)
 
-	time.AfterFunc(e.openDoorDuration, func() {
+	e.setAllLights()
+
+	time.AfterFunc(1*time.Second, func() {
 		for e.doorObstructed {
 			time.Sleep(20 * time.Millisecond)
 		}
@@ -169,40 +173,23 @@ func (e *Elevator) openAndCloseDoor() {
 	})
 }
 
-func (e *Elevator) stopOnCurrentFloor() bool {
-	// take all cab requests
-	if e.requests[e.currentFoor][elevio.BT_Cab] {
-		return true
-	}
-
+func (e *elevator) stopOnCurrentFloor() bool {
 	if e.direction == elevio.MD_Up {
-		// take requests in same direction
-		if e.requests[e.currentFoor][elevio.BT_HallUp] {
-			return true
-		}
-		// take requests in opposite direction iff no unanswered requests in same direction
-		if e.requests[e.currentFoor][elevio.BT_HallDown] && !e.hasRequestAbove() {
-			return true
-		}
-
+		return (e.requests[e.floor][elevio.BT_Cab] ||
+			e.requests[e.floor][elevio.BT_HallUp] ||
+			!e.hasRequestAbove())
 	} else if e.direction == elevio.MD_Down {
-		// take requests in same direction
-		if e.requests[e.currentFoor][elevio.BT_HallDown] {
-			return true
-		}
-		// take requests in opposite direction iff no unanswered requests in same direction
-		if e.requests[e.currentFoor][elevio.BT_HallUp] && !e.hasRequestBelow() {
-			return true
-		}
+		return (e.requests[e.floor][elevio.BT_Cab] ||
+			e.requests[e.floor][elevio.BT_HallDown] ||
+			!e.hasRequestBelow())
 	}
-
 	return false
 }
 
-func (e *Elevator) hasRequestAbove() bool {
-	for floor := e.currentFoor + 1; floor < len(e.requests); floor++ {
-		for buttonType := 0; buttonType < len(e.requests[floor]); buttonType++ {
-			if e.requests[floor][buttonType] {
+func (e *elevator) hasRequestAbove() bool {
+	for f := e.floor + 1; f < len(e.requests); f++ {
+		for btn := 0; btn < len(e.requests[f]); btn++ {
+			if e.requests[f][btn] {
 				return true
 			}
 		}
@@ -210,10 +197,10 @@ func (e *Elevator) hasRequestAbove() bool {
 	return false
 }
 
-func (e *Elevator) hasRequestBelow() bool {
-	for floor := e.currentFoor - 1; floor > -1; floor-- {
-		for buttonType := 0; buttonType < len(e.requests[floor]); buttonType++ {
-			if e.requests[floor][buttonType] {
+func (e *elevator) hasRequestBelow() bool {
+	for f := 0; f < e.floor; f++ {
+		for btn := 0; btn < len(e.requests[f]); btn++ {
+			if e.requests[f][btn] {
 				return true
 			}
 		}
@@ -221,39 +208,29 @@ func (e *Elevator) hasRequestBelow() bool {
 	return false
 }
 
-func (e *Elevator) addRequest(b elevio.ButtonEvent) {
-	e.requests[b.Floor][b.Button] = true
-	elevio.SetButtonLamp(b.Button, b.Floor, true)
-}
-
-func (e *Elevator) clearRequest(b elevio.ButtonEvent) {
-	e.requests[e.currentFoor][b.Button] = false
-	elevio.SetButtonLamp(elevio.ButtonType(b.Button), b.Floor, false)
-}
-
-func (e *Elevator) clearFloorRequests(d elevio.MotorDirection) {
+func (e *elevator) clearFloorRequests(d elevio.MotorDirection) {
 	// cab requests
-	e.clearRequest(elevio.ButtonEvent{Floor: e.currentFoor, Button: elevio.BT_Cab})
+	e.requests[e.floor][elevio.BT_Cab] = false
 
 	// same direction calls
 	if d == elevio.MD_Up {
-		e.clearRequest(elevio.ButtonEvent{Floor: e.currentFoor, Button: elevio.BT_HallUp})
+		e.requests[e.floor][elevio.BT_HallUp] = false
 	} else if d == elevio.MD_Down {
-		e.clearRequest(elevio.ButtonEvent{Floor: e.currentFoor, Button: elevio.BT_HallDown})
+		e.requests[e.floor][elevio.BT_HallDown] = false
 	} else if d == elevio.MD_Stop {
-		e.clearRequest(elevio.ButtonEvent{Floor: e.currentFoor, Button: elevio.BT_HallUp})
-		e.clearRequest(elevio.ButtonEvent{Floor: e.currentFoor, Button: elevio.BT_HallDown})
+		e.requests[e.floor][elevio.BT_HallUp] = false
+		e.requests[e.floor][elevio.BT_HallDown] = false
 	}
 
 	// opposite direction calls iff there's no more unfilled requests in direction
 	if d == elevio.MD_Up && !e.hasRequestAbove() {
-		e.clearRequest(elevio.ButtonEvent{Floor: e.currentFoor, Button: elevio.BT_HallDown})
+		e.requests[e.floor][elevio.BT_HallDown] = false
 	} else if d == elevio.MD_Down && !e.hasRequestBelow() {
-		e.clearRequest(elevio.ButtonEvent{Floor: e.currentFoor, Button: elevio.BT_HallUp})
+		e.requests[e.floor][elevio.BT_HallUp] = false
 	}
 }
 
-func (e *Elevator) setNextDirection(d elevio.MotorDirection) {
+func (e *elevator) setNextDirection(d elevio.MotorDirection) {
 	// keeps same direction as long as there's requests in same direction left
 	if d == elevio.MD_Up && e.hasRequestAbove() {
 		e.state = ST_Moving
@@ -270,5 +247,13 @@ func (e *Elevator) setNextDirection(d elevio.MotorDirection) {
 	} else {
 		e.state = ST_Idle
 		e.direction = elevio.MD_Stop
+	}
+}
+
+func (e *elevator) setAllLights() {
+	for f := 0; f < len(e.requests); f++ {
+		for btn := 0; btn < len(e.requests[f]); btn++ {
+			elevio.SetButtonLamp(elevio.ButtonType(btn), f, e.requests[f][btn])
+		}
 	}
 }

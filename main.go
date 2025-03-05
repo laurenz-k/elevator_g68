@@ -3,13 +3,12 @@ package main
 import (
 	"elevator/controller"
 	"flag"
-	"time"
 )
 
 func main() {
+	idPtr := flag.Int("id", 0, "unique identifier of elevator")
 	addrPtr := flag.String("addr", "localhost:15657", "Address of elevator hardware")
 	flag.Parse()
 
-	elevator := controller.NewElevator(*addrPtr, 9, 1000*time.Millisecond)
-	elevator.Run()
+	controller.StartControlLoop(*idPtr, *addrPtr, 9)
 }

@@ -11,8 +11,6 @@ import (
 // Add RAFT in a seperate file? It is not super easy to implement, but it would be nice for our system
 
 
-var assignmentChan chan Assignment
-		
 const broadcastAddr = "255.255.255.255"
 const broadcastPort = "20068"
 
@@ -78,7 +76,7 @@ func deserializeAssignment(m byte[]) Assignment {  // @JakobSO Is this right? a 
 	return assignment
 }
 
-func ReceiveAssignments(thisElevatorID int) {
+func ReceiveAssignments(assignmentChan chan elevio.ButtonEvent, thisElevatorID int) {
 	addr, _ := net.ResolveUDPAddr("udp", broadcastAddr + ":" + broadcastPort)
 	conn, _ := net.ListenUDP("udp", addr)
 	
@@ -90,10 +88,11 @@ func ReceiveAssignments(thisElevatorID int) {
 		n, _, _ := conn.ReadFromUDP(buf)
 		assignment := deserialize(buf[:n])
 		if assignment.ElevatorID == thisElevatorID {
+			// NOTE laurenzk maybe we could just send ButtonEvent here - then we can handle it same 
+			// way as regular button press in elevator controller loop
 			assignmentChan <- assignment
 		}
-	}
-	
+	}	
 }
 
 // This function should be called by non-master elevators whenever a new hall call is registered.

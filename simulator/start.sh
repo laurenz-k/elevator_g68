@@ -9,7 +9,7 @@ CONTROLLER_NAME='elevator_controller'
 for id in $(seq 1 $((NUM_ELEVATORS)));
 do
     cmd_sim="docker run -it --init --rm --name ${SIMULATOR_NAME}_$id --network $NETWORK_NAME $SIMULATOR_NAME"
-    cmd_controller="docker run --rm --network $NETWORK_NAME --name ${CONTROLLER_NAME}_$id $CONTROLLER_NAME -addr ${SIMULATOR_NAME}_$id:15657"
+    cmd_controller="docker run --rm --network $NETWORK_NAME --name ${CONTROLLER_NAME}_$id $CONTROLLER_NAME -addr ${SIMULATOR_NAME}_$id:15657 -id $id"
 
     if [[ "$OSTYPE" == "darwin"* ]]; then
         # macos

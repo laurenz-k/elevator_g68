@@ -87,6 +87,9 @@ func (e *elevator) handleButtonPress(b elevio.ButtonEvent) {
 func (e *elevator) addRequest(b elevio.ButtonEvent) {
 	e.requests[b.Floor][b.Button] = true
 
+	// pause 1 second to ensure 10 heartbeats have been sent before lighting the button
+	time.Sleep(1)
+
 	switch e.state {
 	case ST_Idle:
 		if e.floor < b.Floor {

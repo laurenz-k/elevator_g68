@@ -83,3 +83,23 @@ func TestUpdateStates(t *testing.T) {
 		t.Errorf("Invalid state after applying updates")
 	}
 }
+
+func TestDynamicSizingOfUpdateStates(t *testing.T) {
+	// ensure arbitrary amount of elevators can join the network
+	for i := range 250 {
+		updateStates(&elevatorState{
+			id:            uint8(i),
+			nonce:         0,
+			currFloor:     4,
+			currDirection: elevio.MD_Down,
+			request:       [][2]bool{{true, false}, {false, false}},
+			lastSync:      time.Now(),
+		})
+	}
+
+	for i, el := range states {
+		if uint8(i) != el.id {
+			t.Errorf("Invalid state after applying updates")
+		}
+	}
+}

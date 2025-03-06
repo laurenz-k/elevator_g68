@@ -6,5 +6,5 @@ type ElevatorState interface {
 	GetID() int
 	GetFloor() int
 	GetDirection() elevio.MotorDirection
-	GetRequests() [][2]bool
+	GetRequests() [][3]bool
 }

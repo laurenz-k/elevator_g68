@@ -14,28 +14,28 @@ func TestSerializeDeserialize(t *testing.T) {
 			nonce:         0,
 			currFloor:     0,
 			currDirection: elevio.MD_Up,
-			request:       [][2]bool{{true, false}, {false, false}, {true, false}},
+			request:       [][3]bool{{true, false}, {false, false}, {true, false}},
 		},
 		{
 			id:            1,
 			nonce:         0,
 			currFloor:     1,
 			currDirection: elevio.MD_Down,
-			request:       [][2]bool{{true, false}, {false, false}, {true, false}},
+			request:       [][3]bool{{true, false}, {false, false}, {true, false}},
 		},
 		{
 			id:            2,
 			nonce:         256,
 			currFloor:     2,
 			currDirection: elevio.MD_Stop,
-			request:       [][2]bool{{false, false}, {false, false}},
+			request:       [][3]bool{{false, false}, {false, false}},
 		},
 		{
 			id:            9,
 			nonce:         600,
 			currFloor:     5,
 			currDirection: elevio.MD_Stop,
-			request:       [][2]bool{{true, true}},
+			request:       [][3]bool{{true, true}},
 		},
 	}
 
@@ -55,7 +55,7 @@ func TestUpdateStates(t *testing.T) {
 		nonce:         0,
 		currFloor:     4,
 		currDirection: elevio.MD_Down,
-		request:       [][2]bool{{true, false}, {false, false}},
+		request:       [][3]bool{{true, false}, {false, false}},
 		lastSync:      time.Now(),
 	}
 	endState := elevatorState{
@@ -63,7 +63,7 @@ func TestUpdateStates(t *testing.T) {
 		nonce:         5,
 		currFloor:     5,
 		currDirection: elevio.MD_Down,
-		request:       [][2]bool{{true, false}, {false, false}},
+		request:       [][3]bool{{true, false}, {false, false}},
 		lastSync:      time.Now(),
 	}
 	staleState := elevatorState{
@@ -71,7 +71,7 @@ func TestUpdateStates(t *testing.T) {
 		nonce:         2, // old nonce not applied
 		currFloor:     0,
 		currDirection: elevio.MD_Down,
-		request:       [][2]bool{{true, false}, {false, false}},
+		request:       [][3]bool{{true, false}, {false, false}},
 		lastSync:      time.Now(),
 	}
 
@@ -81,5 +81,25 @@ func TestUpdateStates(t *testing.T) {
 
 	if !reflect.DeepEqual(*states[2], endState) {
 		t.Errorf("Invalid state after applying updates")
+	}
+}
+
+func TestDynamicSizingOfUpdateStates(t *testing.T) {
+	// ensure arbitrary amount of elevators can join the network
+	for i := range 250 {
+		updateStates(&elevatorState{
+			id:            uint8(i),
+			nonce:         0,
+			currFloor:     4,
+			currDirection: elevio.MD_Down,
+			request:       [][3]bool{{true, false}, {false, false}},
+			lastSync:      time.Now(),
+		})
+	}
+
+	for i, el := range states {
+		if uint8(i) != el.id {
+			t.Errorf("Invalid state after applying updates")
+		}
 	}
 }

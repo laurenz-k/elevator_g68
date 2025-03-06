@@ -7,9 +7,6 @@ import (
 	"elevator/statesync"
 )
 
-// TODO: Add a voting system for master election (RAFT)
-// Add RAFT in a seperate file? It is not super easy to implement, but it would be nice for our system
-
 const broadcastAddr = "255.255.255.255"
 const broadcastPort = "20068"
 
@@ -136,14 +133,6 @@ func ReceiveAssignments(assignmentChan chan elevio.ButtonEvent, thisElevatorID i
 	}
 }
 
-// This function should be called by non-master elevators whenever a new hall call is registered.
-// The master should then evaluate the call and assign it to an elevator (via Assign).
-func NotifyMasterOfNewHallCall(elevID int, floor int, button elevio.ButtonType) {
-	// TODO:
-	// 1. Send a message (UDP, TCP, or statesync) to the master elevator indicating a new hall call.
-	// 2. The master, upon receiving this, will run the assignment algorithm (cost function, etc.).
-	// 3. If this elevator is itself the master, it might short-circuit and just call `Assign(...)`.
-}
 
 // If the disconnected elevator recovers at the same time you're reassigning tasks
 // you might end up with duplicate assignments. Not too bad of a problem, since were not losing any calls.
@@ -156,21 +145,7 @@ func ReassignTasksForDisconnectedElevator(disconnectedID int) {
 	// 3. Re-run the assignment logic (cost function) for each of those tasks.
 }
 
-// The elevator is disconnected from the network but can still move locally.
-// Its rare but possible. If we let it take hall calls we cannot ensure it will not lose them.
-// We might want to let it handle cab calls only.
-// (iirc Task description said elevators should be able to run "solo mode" if they get isolated)
-//
-// This function is called periodically if the elevator is offline, to decide whether it should
-// handle new calls locally or remain idle.
-func HandleLocalCallsWhenIsolated(elevID int) {
-	// TODO:
-	// 1. Check if we have connectivity to the master or any peer.
-	// 2. If fully isolated, handle cab calls in a minimal way (stop at floors pressed inside the cabin).
-	// 3. Log or queue hall calls so they can be broadcast if/when we reconnect?
-	// (Can cause duplicates if buttons get pressed on other elevators)
-}
-
+// Might not be nessecary - Dont implement yet :)
 // If the master is down or busy, or if theres any scenario where we cant immediately assign
 // a hall call, we can store it in a FIFO queue. Once the master is ready or a new master
 // is elected, we pop from the queue and run the assignment. This way we dont lose any button presses

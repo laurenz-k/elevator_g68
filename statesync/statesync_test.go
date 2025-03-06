@@ -14,28 +14,28 @@ func TestSerializeDeserialize(t *testing.T) {
 			nonce:         0,
 			currFloor:     0,
 			currDirection: elevio.MD_Up,
-			request:       [][2]bool{{true, false}, {false, false}, {true, false}},
+			request:       [][3]bool{{true, false}, {false, false}, {true, false}},
 		},
 		{
 			id:            1,
 			nonce:         0,
 			currFloor:     1,
 			currDirection: elevio.MD_Down,
-			request:       [][2]bool{{true, false}, {false, false}, {true, false}},
+			request:       [][3]bool{{true, false}, {false, false}, {true, false}},
 		},
 		{
 			id:            2,
 			nonce:         256,
 			currFloor:     2,
 			currDirection: elevio.MD_Stop,
-			request:       [][2]bool{{false, false}, {false, false}},
+			request:       [][3]bool{{false, false}, {false, false}},
 		},
 		{
 			id:            9,
 			nonce:         600,
 			currFloor:     5,
 			currDirection: elevio.MD_Stop,
-			request:       [][2]bool{{true, true}},
+			request:       [][3]bool{{true, true}},
 		},
 	}
 
@@ -55,7 +55,7 @@ func TestUpdateStates(t *testing.T) {
 		nonce:         0,
 		currFloor:     4,
 		currDirection: elevio.MD_Down,
-		request:       [][2]bool{{true, false}, {false, false}},
+		request:       [][3]bool{{true, false}, {false, false}},
 		lastSync:      time.Now(),
 	}
 	endState := elevatorState{
@@ -63,7 +63,7 @@ func TestUpdateStates(t *testing.T) {
 		nonce:         5,
 		currFloor:     5,
 		currDirection: elevio.MD_Down,
-		request:       [][2]bool{{true, false}, {false, false}},
+		request:       [][3]bool{{true, false}, {false, false}},
 		lastSync:      time.Now(),
 	}
 	staleState := elevatorState{
@@ -71,7 +71,7 @@ func TestUpdateStates(t *testing.T) {
 		nonce:         2, // old nonce not applied
 		currFloor:     0,
 		currDirection: elevio.MD_Down,
-		request:       [][2]bool{{true, false}, {false, false}},
+		request:       [][3]bool{{true, false}, {false, false}},
 		lastSync:      time.Now(),
 	}
 
@@ -92,7 +92,7 @@ func TestDynamicSizingOfUpdateStates(t *testing.T) {
 			nonce:         0,
 			currFloor:     4,
 			currDirection: elevio.MD_Down,
-			request:       [][2]bool{{true, false}, {false, false}},
+			request:       [][3]bool{{true, false}, {false, false}},
 			lastSync:      time.Now(),
 		})
 	}

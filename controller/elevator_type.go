@@ -31,11 +31,12 @@ func (e *elevator) GetDirection() elevio.MotorDirection {
 	return e.direction
 }
 
-func (e *elevator) GetRequests() [][2]bool {
-	requestsCopy := make([][2]bool, len(e.requests))
+func (e *elevator) GetRequests() [][3]bool {
+	requestsCopy := make([][3]bool, len(e.requests))
 	for i, requests := range e.requests {
 		requestsCopy[i][elevio.BT_HallUp] = requests[elevio.BT_HallUp]
 		requestsCopy[i][elevio.BT_HallDown] = requests[elevio.BT_HallDown]
+		requestsCopy[i][elevio.BT_Cab] = requests[elevio.BT_Cab]
 	}
 	return requestsCopy
 }

@@ -31,7 +31,7 @@ type elevatorState struct {
 	nonce         uint32
 	currFloor     uint8
 	currDirection elevio.MotorDirection
-	request       [][2]bool
+	request       [][3]bool
 	lastSync      time.Time
 }
 
@@ -192,12 +192,12 @@ func deserialize(m []byte) *elevatorState {
 		nonce:         binary.LittleEndian.Uint32(m[1:5]),
 		currFloor:     m[5],
 		currDirection: elevio.MotorDirection(int8(m[6])),
-		request:       make([][2]bool, 0, 128),
+		request:       make([][3]bool, 0, 128),
 	}
 
 	offset := 7
 	for i := offset; i < len(m); i += 2 {
-		currRow := [2]bool{m[i] == 1, m[i+1] == 1}
+		currRow := [3]bool{m[i] == 1, m[i+1] == 1}
 		elevatorState.request = append(elevatorState.request, currRow)
 	}
 

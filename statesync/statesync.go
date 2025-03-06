@@ -79,6 +79,7 @@ func ReceiveStates() {
 		stateMsg.lastSync = time.Now()
 
 		updateStates(stateMsg)
+		lightHallButtons()
 	}
 }
 
@@ -222,6 +223,42 @@ func updateStates(s *elevatorState) {
 	if vOld == nil || vOld.nonce < s.nonce {
 		states[id] = s
 	}
+}
+
+func lightHallButtons() {
+	buttonsToLight := orAggregateAllLiveRequests()
+
+	for i, row := range buttonsToLight {
+		for j, val := range row {
+			elevio.SetButtonLamp(elevio.ButtonType(j), i, val)
+		}
+	}
+}
+
+func orAggregateAllLiveRequests() [][2]bool {
+	var floorCount int
+	for _, state := range states {
+		if state != nil {
+			floorCount = len(state.request)
+			break
+		}
+	}
+
+	aggMatrix := make([][2]bool, floorCount)
+
+	for _, state := range states {
+		if state == nil || time.Since(state.lastSync) > syncTimeout {
+			continue
+		}
+
+		for floor_i := range len(aggMatrix) {
+			for btn_i := range len(aggMatrix[floor_i]) {
+				aggMatrix[floor_i][btn_i] = aggMatrix[floor_i][btn_i] || state.request[floor_i][btn_i]
+			}
+		}
+	}
+
+	return aggMatrix
 }
 
 // Potential issue: If the elevator has been offline for too long, a direct state request might time out.

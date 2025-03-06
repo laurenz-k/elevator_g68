@@ -70,7 +70,7 @@ func setup(id int, driverAddr string, numFloors int) *elevator {
 		requests:       make([][3]bool, numFloors),
 		doorObstructed: false,
 	}
-	elevator.setAllLights()
+	elevator.setCabButtonLights()
 	return elevator
 }
 
@@ -108,7 +108,7 @@ func (e *elevator) addRequest(b elevio.ButtonEvent) {
 		e.requests[e.floor][elevio.BT_HallDown] = false
 	}
 
-	e.setAllLights()
+	e.setCabButtonLights()
 }
 
 func (e *elevator) handleFloorChange(floorNum int) {
@@ -159,7 +159,7 @@ func (e *elevator) openAndCloseDoor() {
 
 	e.clearFloorRequests(prevDirection)
 
-	e.setAllLights()
+	e.setCabButtonLights()
 
 	time.AfterFunc(1*time.Second, func() {
 		for e.doorObstructed {
@@ -250,10 +250,9 @@ func (e *elevator) setNextDirection(d elevio.MotorDirection) {
 	}
 }
 
-func (e *elevator) setAllLights() {
+func (e *elevator) setCabButtonLights() {
+	// cab calls get set here, hall calls get set in statesync
 	for f := 0; f < len(e.requests); f++ {
-		for btn := 0; btn < len(e.requests[f]); btn++ {
-			elevio.SetButtonLamp(elevio.ButtonType(btn), f, e.requests[f][btn])
-		}
+		elevio.SetButtonLamp(elevio.BT_Cab, f, e.requests[f][elevio.BT_Cab])
 	}
 }

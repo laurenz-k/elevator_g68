@@ -103,3 +103,44 @@ func TestDynamicSizingOfUpdateStates(t *testing.T) {
 		}
 	}
 }
+
+func TestOrAggregateAllLiveRequests(t *testing.T) {
+	updateStates(&elevatorState{
+		id:            1,
+		nonce:         0,
+		currFloor:     4,
+		currDirection: elevio.MD_Down,
+		request:       [][3]bool{{false, true}, {false, false}},
+		lastSync:      time.Now(),
+	})
+	updateStates(&elevatorState{
+		id:            2,
+		nonce:         0,
+		currFloor:     4,
+		currDirection: elevio.MD_Down,
+		request:       [][3]bool{{false, false}, {false, true}},
+		lastSync:      time.Now(),
+	})
+	updateStates(&elevatorState{
+		id:            3,
+		nonce:         0,
+		currFloor:     4,
+		currDirection: elevio.MD_Down,
+		request:       [][3]bool{{true, false}, {false, true}},
+		lastSync:      time.Now(),
+	})
+
+	// nonlive alevator state ignored
+	updateStates(&elevatorState{
+		id:            2,
+		nonce:         0,
+		currFloor:     4,
+		currDirection: elevio.MD_Down,
+		request:       [][3]bool{{true, true}, {true, true}},
+		lastSync:      time.Now().Add(-1 * time.Hour),
+	})
+
+	expects := [][]bool{{true, true}, {false, true}}
+	is := orAggregateAllLiveRequests()
+	reflect.DeepEqual(is, expects)
+}

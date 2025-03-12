@@ -1,0 +1,30 @@
+0b4cdff7
+8
+- Separation of concerns: I think the way you structure your project is excellent. Each module has a 
+single clear responsibility and it is clear to me where I have to look to find an implementation.
+- External request assignment algorithm: I am unsure why you use an external request assignment 
+algorithm. I am sure you have a strong reason for it but since this is quite an unexpected decision,
+which comes with its drawbacks I am curious why you chose to go with this. It would be nice to see 
+the source code for it alongside an explanation as to why you made this decision.
+- Language consistency: I'm pretty sure this is something you would have fixed later on anyway but 
+if not: It would be nice if you used either English or Norwegian in your comments and even more 
+importantly your logs/print statements.
+- Overview documentation: As somebody new to your codebase (and hasn't been a part of your lab 
+discussions) I would have liked a short high-level overview of your overall fault tolerance strategy, 
+the individual modules you use and how they interact. A few lines in a README would have helped me 
+build a mental model of your project before diving into the code.
+- Comments: I like your commenting style. It does a good job of explaining details about code. In 
+some cases, it seems a bit redundant tho. Examples would be "oppretter global instans av 
+ElevatorManager" or "starter som inaktiv". In these lines, your code is quite self-documenting and 
+in my opinion, you can assume other programmers understand what's going on there. I think also try to
+be more consistent, some functions have detailed comments while others have none.
+- Hard coded values: In some cases, you are still hardcoding values. An example is `[4][3]bool{}` 
+where you could use `datatypes.N_FLOORS` to make it easier to change things in the future.
+- Duplicate `ClearAllRequests` implementation: You're implementing this function both in 
+`request_utilities` and `elevator_utilities`.
+- Variable naming: You do a great job naming variables. I understood their purpose in most cases, 
+only the HRA acronym wasn't quite clear to me at first.
+
+hash2
+score2
+feedback for group 2

@@ -25,6 +25,38 @@ where you could use `datatypes.N_FLOORS` to make it easier to change things in t
 - Variable naming: You do a great job naming variables. I understood their purpose in most cases, 
 only the HRA acronym wasn't quite clear to me at first.
 
-hash2
-score2
-feedback for group 2
+4e6144fd
+9
+- The code is well-structured and easy to follow, even for someone who has not been a part of the 
+  project and is just looking in from the outside!
+- You have used constants for command-line arguments, which helps with the readability, super nice!
+- Comments are nice to have, but here there are maybe too many comments that explain something 
+  selfexplanitory - eg:
+  // Global instance of SharedState
+  var GlobalState *SharedState
+  Also, try to keep comments to one language. Writing comments in mixed language can make things 
+  more confusing
+- The is_testing flag is a good way to separate testing logic from the rest of the code, but consider 
+  using the flag package in go! Would work great here i think
+- The use of os.Args to parse command-line arguments is good
+- The id variable is initialized as an empty string and later checked for emptiness. Consider 
+  adding a default value or a more descriptive error message if id is empty 
+- The id variable is assigned using os.Args[i+1] without checking if i+1 is within bounds. This 
+  could lead to an out-of-bounds error if the --id argument is the last argument or if it is not 
+  followed by a value. Small edge case/user error situation but nice to take a look at
+- Theres a lot of "skeleton" here, but much of the muscle is still missing. This is perfectly 
+  fine at this stage, but consider adding more informative comments or fill in the markdown files
+  a little more - Maybe its in git issues that i cannot see, in that case this is perfectly fine!
+Notes: 
+"fmt.Printf("Unknown Arg: %s", arg)" in main.go is missing a newline command. Could be unintended
+Theres also no way of turning of the testing flag, as far as i can tell. Im assuming one would just 
+restart everything, but maybe add a --no-test flag argument? Not super nessecary.
+I would personally refactor the main function to separate argument parsing and testing logic into 
+different functions or modules.
+There is also a lack of error handling at this point, but i think this part would be in the files 
+that have not yet been implemented. Make sure not to forget this, as it is suepr important!!
+Other than this, i think this project is looking really good, and im confident you will reach your goal 
+if you keep doing exactly what youve been doing!
+
+
+

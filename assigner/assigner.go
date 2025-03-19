@@ -16,22 +16,20 @@ type Assignment struct {
 	Button     ButtonType
 }
 
-// Given a call (floor, button) and a set of elevator states, returns the best elevator ID.
+/**
+ * @brief Calculates the cost of assigning a call to every elevator still alive.
+ *
+ * @param call The call to be assigned.
+ * @param aliveElevators The IDs of the alive elevators.
+ * @return The ID of the elevator with the lowest cost.
+ */
 func Cost(call elevio.ButtonEvent, aliveElevators []int) int {
-	// TODO:
-	// 1. For each elevator in aliveElevators, compute a cost based on:
-	//    - Distance to the call floor
-	//    - Current direction / load
-	//    - Other calls in queue
-	//	  An example cost function exists on blackboard, but would have to be rewritten in Go.
-	// 2. Pick the elevator with the lowest cost. Break ties by elevator ID if needed.
-	// 3. Return the chosen elevator ID.
-	lowestcost int = 1000
-	lowestcostID int = 0
+	lowestcost  := 1000
+	lowestcostID := 0
 	
 	for _, elevatorID := range aliveElevators {
-		state := GetElevatorState(elevatorID);
-		cost int = 0;
+		state := GetState(elevatorID);
+		cost := 0
 		if state.Floor < call.Floor { //Checks if we are below the floor of the call
 			cost += call.Floor - state.Floor //The difference in floors between the elevator and call is added to the cost
 			if state.currDirection == elevio.MD_Down { //Checks if we are going in a direction opposite of the call
@@ -44,7 +42,7 @@ func Cost(call elevio.ButtonEvent, aliveElevators []int) int {
 				cost += 5
 			}
 		}
-		else{ //If we are neither above or below the floor, we are at the floor
+		else { //If we are neither above or below the floor, we are at the floor
 			cost = 0 //No cost associated with a call at the same floor
 		}
 		
@@ -74,9 +72,16 @@ func Cost(call elevio.ButtonEvent, aliveElevators []int) int {
 		return lowestcostID 
 }		
 
-
+/**
+ * @brief Asssigns a call to the best suited, alive elevator.
+ *
+ * @param request The call to be assigned.
+ */
 func Assign(request elevio.ButtonEvent) {
-	//Check if already assigned to an alive elevator - if so, do nothing
+	//Check if the call is already assigned to an elevator
+	if allreadyAssigned(request) {
+		return
+	}
 	//Obtain states of alive elevators, calculate their costs. Lowest cost wins. In a draw, lowest/highest ID wins.
 	aliveIDs := GetAliveElevatorIDs()
 	//Go through the costs of all elevators in loop with. Lowest wins.
@@ -97,6 +102,28 @@ func Assign(request elevio.ButtonEvent) {
 	conn.Write(serializeAssignment(assignment))
 }
 
+/**
+ * @brief Checks if a call is already assigned to an elevator.
+ *
+ * @param request The call to be checked.
+ */
+func allreadyAssigned(request elevio.ButtonEvent) bool {
+	aliveIDs := GetAliveElevatorIDs()
+	for _, elevatorID := range aliveIDs {
+		state := GetState(elevatorID)
+		if state.GetRequests()[request.Floor][int(request.Button)] {
+			return true
+		}
+	}
+	return false
+}
+
+/**
+ * @brief Serializes an assignment into a byte slice.
+ *
+ * @param assignment The assignment to serialize.
+ * @return A byte slice representing the serialized assignment.
+ */
 func serializeAssignment(assignment Assignment) []byte {
 	buf := make([]byte, 128)
 	buf = append(buf, byte(assignment.ElevatorID))
@@ -105,7 +132,13 @@ func serializeAssignment(assignment Assignment) []byte {
 	return buf
 }
 
-func deserializeAssignment(m []byte) Assignment { // @JakobSO Is this right? a list of bytes is defined []byte in Golang afaik
+/**
+ * @brief Deserializes a byte slice into an Assignment.
+ *
+ * @param m The byte slice containing serialized Assignment data.
+ * @return The deserialized Assignment.
+ */
+func deserializeAssignment(m []byte) Assignment { 
 	assignment := Assignment{
 		ElevatorID: m[0],
 		Floor:      m[1],
@@ -114,6 +147,11 @@ func deserializeAssignment(m []byte) Assignment { // @JakobSO Is this right? a l
 	return assignment
 }
 
+/**
+ * @brief Establishes a UDP connection and listens for incoming assignments. When an assignment mathcing the elevator is received, it is deserialized
+ * @param assignmentChan The channel to send the received assignment to.
+ * @param thisElevatorID The ID of the elevator that should receive the assignment.
+ */
 func ReceiveAssignments(assignmentChan chan elevio.ButtonEvent, thisElevatorID int) {
 	addr, _ := net.ResolveUDPAddr("udp", broadcastAddr+":"+broadcastPort)
 	conn, _ := net.ListenUDP("udp", addr)
@@ -128,21 +166,39 @@ func ReceiveAssignments(assignmentChan chan elevio.ButtonEvent, thisElevatorID i
 		if assignment.ElevatorID == thisElevatorID {
 			// NOTE laurenzk maybe we could just send ButtonEvent here - then we can handle it same
 			// way as regular button press in elevator controller loop
-			assignmentChan <- assignment
+			assignmentChan <- assignment.Button
 		}
 	}
 }
 
 
-// If the disconnected elevator recovers at the same time you're reassigning tasks
-// you might end up with duplicate assignments. Not too bad of a problem, since were not losing any calls.
-//
-// This function should be called when an elevator times out or fails a heartbeat.
+/**
+ * @brief Reassigns all tasks assigned to a disconnected elevator to the best available elevator.
+ * @param disconnectedID The ID of the disconnected elevator.
+ */
 func ReassignTasksForDisconnectedElevator(disconnectedID int) {
 	// TODO:
 	// 1. Retrieve all tasks currently assigned to 'disconnectedID'.
 	// 2. Mark them as unassigned or move them into a queue of unassigned tasks.
 	// 3. Re-run the assignment logic (cost function) for each of those tasks.
+	// 4. Assign them to the best available elevator.
+	disconnectedState := GetState(disconnectedID)
+	for floor, order := range disconnectedState.GetRequests() { //Goes through each floor, 
+		if order[0] {											//looks for hall calls assigned to the dead elevator,
+			event := elevio.ButtonEvent{ 						//assigns them to a new one.
+				Floor:  floor,
+				Button: elevio.ButtonType(BT_HallUp)
+			}
+			assign(event)
+		}
+		if order[1] {
+			event := elevio.ButtonEvent{
+				Floor: floor,
+				Button: elevio.Buttontype(BT_HallDown)
+			}
+			assign(event)
+		}
+	}
 }
 
 // Might not be nessecary - Dont implement yet :)

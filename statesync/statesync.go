@@ -25,9 +25,9 @@ var states = make([]*elevatorState, 0, 10)
 // var ButtonPressChan chan elevio.ButtonEvent
 
 type elevatorState struct {
-	id            uint8
-	nonce         uint32
-	currFloor     uint8
+	id            int
+	nonce         int
+	currFloor     int
 	currDirection elevio.MotorDirection
 	request       [][3]bool
 	lastSync      time.Time
@@ -76,15 +76,15 @@ func BroadcastState(elevatorPtr types.ElevatorState) {
 	defer conn.Close()
 
 	var myState elevatorState
-	nonce := uint32(0)
+	nonce := 0
 
 	for range ticker.C {
 		if !myState.online {
 			continue
 		}
-		myState.id = uint8(elevatorPtr.GetID())
+		myState.id = elevatorPtr.GetID()
 		myState.nonce = nonce
-		myState.currFloor = uint8(elevatorPtr.GetFloor())
+		myState.currFloor = elevatorPtr.GetFloor()
 		myState.currDirection = elevatorPtr.GetDirection()
 		myState.request = elevatorPtr.GetRequests()
 
@@ -193,9 +193,9 @@ func GetAliveElevatorIDs() []int {
 func serialize(s elevatorState) []byte {
 	buf := make([]byte, 0, 128)
 
-	buf = append(buf, s.id)
-	buf = binary.LittleEndian.AppendUint32(buf, s.nonce)
-	buf = append(buf, s.currFloor)
+	buf = append(buf, uint8(s.id))
+	buf = binary.LittleEndian.AppendUint32(buf, uint32(s.nonce))
+	buf = append(buf, uint8(s.currFloor))
 	buf = append(buf, byte(s.currDirection))
 
 	for _, row := range s.request {
@@ -219,16 +219,16 @@ func serialize(s elevatorState) []byte {
  */
 func deserialize(m []byte) *elevatorState {
 	elevatorState := &elevatorState{
-		id:            m[0],
-		nonce:         binary.LittleEndian.Uint32(m[1:5]),
-		currFloor:     m[5],
+		id:            int(m[0]),
+		nonce:         int(binary.LittleEndian.Uint32(m[1:5])),
+		currFloor:     int(m[5]),
 		currDirection: elevio.MotorDirection(int8(m[6])),
 		request:       make([][3]bool, 0, 128),
 	}
 
 	offset := 7
-	for i := offset; i < len(m); i += 2 {
-		currRow := [3]bool{m[i] == 1, m[i+1] == 1}
+	for i := offset; i < len(m); i += 3 {
+		currRow := [3]bool{m[i] == 1, m[i+1] == 1, m[i+2] == 1}
 		elevatorState.request = append(elevatorState.request, currRow)
 	}
 
@@ -245,8 +245,8 @@ func updateStates(s *elevatorState) {
 	defer mtx.Unlock()
 
 	id := s.id
-	if id >= uint8(len(states)) {
-		states = append(states, make([]*elevatorState, (id+1)-uint8(len(states)))...)
+	if id >= len(states) {
+		states = append(states, make([]*elevatorState, (id+1)-len(states))...)
 	}
 
 	vOld := states[id]
@@ -255,6 +255,9 @@ func updateStates(s *elevatorState) {
 	}
 }
 
+// TODO potential code quality issue
+// problem: fires on every state receive => sets lights very often
+// solution: only set light when there's an actual change
 func lightHallButtons() {
 	buttonsToLight := orAggregateAllLiveRequests()
 
@@ -335,9 +338,10 @@ func (e *elevatorState) ElevatorStuck() {
 		TurnOffElevator(e.GetID())
 	}
 }
-//Move to a better place later
+
+// Move to a better place later
 var lastActionTime time.Time
-var prevFloor uint8
+var prevFloor int
 var prevDirection elevio.MotorDirection
 
 // Updates the lastActionTime of an elevator if it changes direction or floor

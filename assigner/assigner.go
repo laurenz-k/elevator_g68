@@ -2,9 +2,8 @@ package assigner
 
 import (
 	"elevator/elevio"
-	"net"
-	"time"
 	"elevator/statesync"
+	"net"
 )
 
 const broadcastAddr = "255.255.255.255"
@@ -13,7 +12,7 @@ const broadcastPort = "20068"
 type Assignment struct {
 	ElevatorID int
 	Floor      int
-	Button     ButtonType
+	Button     elevio.ButtonType
 }
 
 /**
@@ -24,53 +23,49 @@ type Assignment struct {
  * @return The ID of the elevator with the lowest cost.
  */
 func Cost(call elevio.ButtonEvent, aliveElevators []int) int {
-	lowestcost  := 1000
+	lowestcost := 1000
 	lowestcostID := 0
-	
+
 	for _, elevatorID := range aliveElevators {
-		state := GetState(elevatorID);
+		state := statesync.GetState(elevatorID)
 		cost := 0
-		if state.Floor < call.Floor { //Checks if we are below the floor of the call
-			cost += call.Floor - state.Floor //The difference in floors between the elevator and call is added to the cost
-			if state.currDirection == elevio.MD_Down { //Checks if we are going in a direction opposite of the call
-				cost += 5								
-			}
-		} 
-		else if state.Floor > call.Floor {  //Checks if we are above the floor of the call
-			cost += state.Floor - call.Floor
-			if state.currDirection == elevio.MD_Up {
+		if state.GetFloor() < call.Floor { //Checks if we are below the floor of the call
+			cost += call.Floor - state.GetFloor()       //The difference in floors between the elevator and call is added to the cost
+			if state.GetDirection() == elevio.MD_Down { //Checks if we are going in a direction opposite of the call
 				cost += 5
 			}
-		}
-		else { //If we are neither above or below the floor, we are at the floor
+		} else if state.GetFloor() > call.Floor { //Checks if we are above the floor of the call
+			cost += state.GetFloor() - call.Floor
+			if state.GetDirection() == elevio.MD_Up {
+				cost += 5
+			}
+		} else { //If we are neither above or below the floor, we are at the floor
 			cost = 0 //No cost associated with a call at the same floor
 		}
-		
-		requests := state.getRequests()
 
-		if state.CurrDirection == elevio.MD_Up{ //Checks how many stops we have in the upward direction and associates cost with each stop
-			for i := state.Floor; i < len(requests[:][1]) - 1; i++ { //Iterates from floor above you to the top floor 
-				if requests[i][0] || requests[i][2]{ //Checks for cab calls or hall calls going upwards at the floor and associates cost with it
+		requests := state.GetRequests()
+
+		if state.GetDirection() == elevio.MD_Up { //Checks how many stops we have in the upward direction and associates cost with each stop
+			for i := state.GetFloor(); i < len(requests[:][1])-1; i++ { //Iterates from floor above you to the top floor
+				if requests[i][0] || requests[i][2] { //Checks for cab calls or hall calls going upwards at the floor and associates cost with it
+					cost += 3
+				}
+			}
+		} else if state.GetDirection() == elevio.MD_Down { //Checks how many stops we have in the downward direction and associates cost with each stop
+			for i := state.GetFloor() - 2; i >= 0; i-- { //Iterates from floor below elevator to the bottom floor
+				if requests[i][1] || requests[i][2] { //Checks for cab calls or hall calls going upwards at the floor and associates cost with it
 					cost += 3
 				}
 			}
 		}
 
-		else if state.CurrDirection == eleevio.MD_Down{ //Checks how many stops we have in the downward direction and associates cost with each stop
-			for i := state.Floor - 2; i >= 0; i--{ //Iterates from floor below elevator to the bottom floor 
-				if requests[i][1] || requests[i][2]{ //Checks for cab calls or hall calls going upwards at the floor and associates cost with it
-					cost += 3
-				}
-			} 
-		}
-
-		if cost < lowestcost { 
+		if cost < lowestcost {
 			lowestcost = cost
 			lowestcostID = elevatorID
 		}
-	}	
-		return lowestcostID 
-}		
+	}
+	return lowestcostID
+}
 
 /**
  * @brief Asssigns a call to the best suited, alive elevator.
@@ -83,17 +78,17 @@ func Assign(request elevio.ButtonEvent) {
 		return
 	}
 	//Obtain states of alive elevators, calculate their costs. Lowest cost wins. In a draw, lowest/highest ID wins.
-	aliveIDs := GetAliveElevatorIDs()
+	aliveIDs := statesync.GetAliveElevatorIDs()
 	//Go through the costs of all elevators in loop with. Lowest wins.
 
 	var winnerElevatorID int = Cost(request, aliveIDs)
-	
+
 	addr := broadcastAddr + ":" + broadcastPort
 	conn, _ := net.Dial("udp", addr)
 
 	defer conn.Close()
 
-	assignment := Assigment{
+	assignment := Assignment{
 		ElevatorID: winnerElevatorID,
 		Floor:      request.Floor,
 		Button:     request.Button,
@@ -108,9 +103,9 @@ func Assign(request elevio.ButtonEvent) {
  * @param request The call to be checked.
  */
 func allreadyAssigned(request elevio.ButtonEvent) bool {
-	aliveIDs := GetAliveElevatorIDs()
+	aliveIDs := statesync.GetAliveElevatorIDs()
 	for _, elevatorID := range aliveIDs {
-		state := GetState(elevatorID)
+		state := statesync.GetState(elevatorID)
 		if state.GetRequests()[request.Floor][int(request.Button)] {
 			return true
 		}
@@ -128,7 +123,7 @@ func serializeAssignment(assignment Assignment) []byte {
 	buf := make([]byte, 128)
 	buf = append(buf, byte(assignment.ElevatorID))
 	buf = append(buf, byte(assignment.Floor))
-	buf = append(buf, byte(int(assignment.Button))) 
+	buf = append(buf, byte(int(assignment.Button)))
 	return buf
 }
 
@@ -138,11 +133,11 @@ func serializeAssignment(assignment Assignment) []byte {
  * @param m The byte slice containing serialized Assignment data.
  * @return The deserialized Assignment.
  */
-func deserializeAssignment(m []byte) Assignment { 
+func deserializeAssignment(m []byte) Assignment {
 	assignment := Assignment{
-		ElevatorID: m[0],
-		Floor:      m[1],
-		Button:     ButtonType(m[3]),
+		ElevatorID: int(m[0]),
+		Floor:      int(m[1]),
+		Button:     elevio.ButtonType(m[3]),
 	}
 	return assignment
 }
@@ -162,15 +157,14 @@ func ReceiveAssignments(assignmentChan chan elevio.ButtonEvent, thisElevatorID i
 
 	for {
 		n, _, _ := conn.ReadFromUDP(buf)
-		assignment := deserialize(buf[:n])
+		assignment := deserializeAssignment(buf[:n])
 		if assignment.ElevatorID == thisElevatorID {
 			// NOTE laurenzk maybe we could just send ButtonEvent here - then we can handle it same
 			// way as regular button press in elevator controller loop
-			assignmentChan <- assignment.Button
+			assignmentChan <- elevio.ButtonEvent{assignment.Floor, assignment.Button}
 		}
 	}
 }
-
 
 /**
  * @brief Reassigns all tasks assigned to a disconnected elevator to the best available elevator.
@@ -182,21 +176,21 @@ func ReassignTasksForDisconnectedElevator(disconnectedID int) {
 	// 2. Mark them as unassigned or move them into a queue of unassigned tasks.
 	// 3. Re-run the assignment logic (cost function) for each of those tasks.
 	// 4. Assign them to the best available elevator.
-	disconnectedState := GetState(disconnectedID)
-	for floor, order := range disconnectedState.GetRequests() { //Goes through each floor, 
-		if order[0] {											//looks for hall calls assigned to the dead elevator,
-			event := elevio.ButtonEvent{ 						//assigns them to a new one.
+	disconnectedState := statesync.GetState(disconnectedID)
+	for floor, order := range disconnectedState.GetRequests() { //Goes through each floor,
+		if order[0] { //looks for hall calls assigned to the dead elevator,
+			event := elevio.ButtonEvent{ //assigns them to a new one.
 				Floor:  floor,
-				Button: elevio.ButtonType(BT_HallUp)
+				Button: elevio.ButtonType(elevio.BT_HallUp),
 			}
-			assign(event)
+			Assign(event)
 		}
 		if order[1] {
 			event := elevio.ButtonEvent{
-				Floor: floor,
-				Button: elevio.Buttontype(BT_HallDown)
+				Floor:  floor,
+				Button: elevio.ButtonType(elevio.BT_HallDown),
 			}
-			assign(event)
+			Assign(event)
 		}
 	}
 }

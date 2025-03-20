@@ -325,20 +325,24 @@ func (e *elevatorState) GetRequests() [][3]bool {
 
 // We need to detect when an elevator is stuck, and reassign its Hall calls, otherwise we will stall the system
 func (e *elevatorState) ElevatorStuck() {
-	// TODO:
-	// 1. Get the state of that elevator. If it is idle, or the door is open on a floor, this elevator is not stuck
-	// 2. If the elevator is moving, check when the last time was that the floor changed.
-	// 2. IF the floor has not changed in a while, Assume elevtator is stuck and go offline.
 	currDirection := e.GetDirection()
 	if currDirection == 0 {
-		//Do nothing
-	} else{
-		if time.Since(e.lastActionTime) > 5{
-			e.online = false
-		}
+		TurnOnElevator()
+	} else if time.Since(lastActionTime) < 5 {
+		TurnOnElevator(e.GetID())
+	} else {
+		TurnOffElevator(e.GetID())
 	}
 }
-//Updates the lastActionTime of an elevator if it changes direction or floor
-func (e *elevatorState) lastAction() {
-	
+
+// Updates the lastActionTime of an elevator if it changes direction or floor
+func (e *elevatorState) timeSinceLastAction() {
+	var lastActionTime time.Time
+	var prevFloor uint8
+	var prevDirection elevio.MotorDirection
+	if e.currFloor != prevFloor || e.currDirection != prevDirection {
+		lastActionTime = time.Now()
+		prevFloor = e.currFloor
+		prevDirection = e.currDirection
+	}
 }

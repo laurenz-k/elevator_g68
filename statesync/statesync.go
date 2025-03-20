@@ -197,8 +197,8 @@ func deserialize(m []byte) *elevatorState {
 	}
 
 	offset := 7
-	for i := offset; i < len(m); i += 2 {
-		currRow := [3]bool{m[i] == 1, m[i+1] == 1}
+	for i := offset; i < len(m); i += 3 {
+		currRow := [...]bool{m[i] == 1, m[i+1] == 1, m[i+2] == 1}
 		elevatorState.request = append(elevatorState.request, currRow)
 	}
 

@@ -11,8 +11,7 @@ const broadcastPort = "20068"
 
 type Assignment struct {
 	ElevatorID int
-	Floor      int
-	Button     elevio.ButtonType
+	Button     elevio.ButtonEvent
 }
 
 /**
@@ -90,8 +89,7 @@ func Assign(request elevio.ButtonEvent) {
 
 	assignment := Assignment{
 		ElevatorID: winnerElevatorID,
-		Floor:      request.Floor,
-		Button:     request.Button,
+		Button:     request,
 	}
 
 	conn.Write(serializeAssignment(assignment))
@@ -122,8 +120,8 @@ func allreadyAssigned(request elevio.ButtonEvent) bool {
 func serializeAssignment(assignment Assignment) []byte {
 	buf := make([]byte, 0, 128)
 	buf = append(buf, uint8(assignment.ElevatorID))
-	buf = append(buf, uint8(assignment.Floor))
-	buf = append(buf, uint8(assignment.Button))
+	buf = append(buf, uint8(assignment.Button.Floor))
+	buf = append(buf, uint8(assignment.Button.Button))
 	return buf
 }
 
@@ -136,8 +134,10 @@ func serializeAssignment(assignment Assignment) []byte {
 func deserializeAssignment(m []byte) Assignment {
 	assignment := Assignment{
 		ElevatorID: int(m[0]),
-		Floor:      int(m[1]),
-		Button:     elevio.ButtonType(int(m[2])),
+		Button: elevio.ButtonEvent{
+			Floor:  int(m[1]),
+			Button: elevio.ButtonType(int(m[2])),
+		},
 	}
 	return assignment
 }
@@ -159,12 +159,7 @@ func ReceiveAssignments(assignmentChan chan elevio.ButtonEvent, thisElevatorID i
 		n, _, _ := conn.ReadFromUDP(buf)
 		assignment := deserializeAssignment(buf[:n])
 		if assignment.ElevatorID == thisElevatorID {
-			// NOTE laurenzk maybe we could just send ButtonEvent here - then we can handle it same
-			// way as regular button press in elevator controller loop
-			assignmentChan <- elevio.ButtonEvent{
-				Floor:  assignment.Floor,
-				Button: assignment.Button,
-			}
+			assignmentChan <- assignment.Button
 		}
 	}
 }

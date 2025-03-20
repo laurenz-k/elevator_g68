@@ -81,7 +81,7 @@ func Assign(request elevio.ButtonEvent) {
 	aliveIDs := statesync.GetAliveElevatorIDs()
 	//Go through the costs of all elevators in loop with. Lowest wins.
 
-	var winnerElevatorID int = Cost(request, aliveIDs)
+	winnerElevatorID := Cost(request, aliveIDs)
 
 	addr := broadcastAddr + ":" + broadcastPort
 	conn, _ := net.Dial("udp", addr)
@@ -120,10 +120,10 @@ func allreadyAssigned(request elevio.ButtonEvent) bool {
  * @return A byte slice representing the serialized assignment.
  */
 func serializeAssignment(assignment Assignment) []byte {
-	buf := make([]byte, 128)
-	buf = append(buf, byte(assignment.ElevatorID))
-	buf = append(buf, byte(assignment.Floor))
-	buf = append(buf, byte(int(assignment.Button)))
+	buf := make([]byte, 0, 128)
+	buf = append(buf, uint8(assignment.ElevatorID))
+	buf = append(buf, uint8(assignment.Floor))
+	buf = append(buf, uint8(assignment.Button))
 	return buf
 }
 
@@ -137,7 +137,7 @@ func deserializeAssignment(m []byte) Assignment {
 	assignment := Assignment{
 		ElevatorID: int(m[0]),
 		Floor:      int(m[1]),
-		Button:     elevio.ButtonType(m[3]),
+		Button:     elevio.ButtonType(int(m[2])),
 	}
 	return assignment
 }
@@ -161,7 +161,10 @@ func ReceiveAssignments(assignmentChan chan elevio.ButtonEvent, thisElevatorID i
 		if assignment.ElevatorID == thisElevatorID {
 			// NOTE laurenzk maybe we could just send ButtonEvent here - then we can handle it same
 			// way as regular button press in elevator controller loop
-			assignmentChan <- elevio.ButtonEvent{assignment.Floor, assignment.Button}
+			assignmentChan <- elevio.ButtonEvent{
+				Floor:  assignment.Floor,
+				Button: assignment.Button,
+			}
 		}
 	}
 }

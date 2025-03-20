@@ -88,7 +88,9 @@ func (e *elevator) addRequest(b elevio.ButtonEvent) {
 	e.requests[b.Floor][b.Button] = true
 
 	// pause 1 second to ensure 10 heartbeats have been sent before lighting the button
-	time.Sleep(1)
+	// TODO issue: causes delay for lighting button => appearance of irresponsiveness
+	// TODO solution: blast out state n times => then continue
+	// time.Sleep(1 * time.Second)
 
 	switch e.state {
 	case ST_Idle:

@@ -14,28 +14,28 @@ func TestSerializeDeserialize(t *testing.T) {
 			nonce:         0,
 			currFloor:     0,
 			currDirection: elevio.MD_Up,
-			request:       [][3]bool{{true, false}, {false, false}, {true, false}},
+			request:       [][3]bool{{true, false, false}, {false, false, false}, {true, false, false}},
 		},
 		{
 			id:            1,
 			nonce:         0,
 			currFloor:     1,
 			currDirection: elevio.MD_Down,
-			request:       [][3]bool{{true, false}, {false, false}, {true, false}},
+			request:       [][3]bool{{true, false, false}, {false, false, false}, {true, false, false}},
 		},
 		{
 			id:            2,
 			nonce:         256,
 			currFloor:     2,
 			currDirection: elevio.MD_Stop,
-			request:       [][3]bool{{false, false}, {false, false}},
+			request:       [][3]bool{{false, false, false}, {false, false, false}},
 		},
 		{
 			id:            9,
 			nonce:         600,
 			currFloor:     5,
 			currDirection: elevio.MD_Stop,
-			request:       [][3]bool{{true, true}},
+			request:       [][3]bool{{true, false, true}},
 		},
 	}
 
@@ -88,7 +88,7 @@ func TestDynamicSizingOfUpdateStates(t *testing.T) {
 	// ensure arbitrary amount of elevators can join the network
 	for i := range 250 {
 		updateStates(&elevatorState{
-			id:            uint8(i),
+			id:            i,
 			nonce:         0,
 			currFloor:     4,
 			currDirection: elevio.MD_Down,
@@ -98,7 +98,7 @@ func TestDynamicSizingOfUpdateStates(t *testing.T) {
 	}
 
 	for i, el := range states {
-		if uint8(i) != el.id {
+		if i != el.id {
 			t.Errorf("Invalid state after applying updates")
 		}
 	}

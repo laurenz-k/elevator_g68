@@ -31,7 +31,7 @@ type elevatorState struct {
 	currDirection elevio.MotorDirection
 	request       [][3]bool
 	lastSync      time.Time
-	online        bool
+	online        bool // TODO make true on startup
 }
 
 /**
@@ -175,6 +175,7 @@ func GetAliveElevatorIDs() []int {
 	mtx.RLock()
 	defer mtx.RUnlock()
 
+	// TODO must always return the elevators own ID => otherwise system becomes irresponsive
 	alive := make([]int, 0, len(states))
 	for id, s := range states {
 		if s != nil && time.Since(s.lastSync) <= syncTimeout {

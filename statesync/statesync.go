@@ -255,6 +255,9 @@ func updateStates(s *elevatorState) {
 	}
 }
 
+/**
+ * @brief Lights up the hall buttons based on the aggregated requests.
+ */
 func lightHallButtons() {
 	buttonsToLight := orAggregateAllLiveRequests()
 
@@ -265,6 +268,11 @@ func lightHallButtons() {
 	}
 }
 
+/**
+ * @brief Aggregates all live requests from all elevators.
+ *
+ * @return A 2D slice representing the aggregated requests.
+ */
 func orAggregateAllLiveRequests() [][2]bool {
 	var floorCount int
 	for _, state := range states {
@@ -291,8 +299,14 @@ func orAggregateAllLiveRequests() [][2]bool {
 	return aggMatrix
 }
 
-// Helps with improving error checking for receiving and processing state messages over UDP.
-// (Not sure if this is needed but can be nice for testing at least, so we dont try to fix something that not broken)
+/**
+ * @brief Helps with improving error checking for receiving and processing state messages over UDP.
+ *
+ * TODO:
+ * 1. In the ReceiveStates loop, check for errors on conn.Read.
+ * 2. If an error occurs, log it and possibly break the loop or retry.
+ * 3. Validate the length of the received data before attempting deserialization.
+ */
 func HandleStateReception() {
 	// TODO:
 	// 1. In the ReceiveStates loop, check for errors on conn.Read.
@@ -301,18 +315,38 @@ func HandleStateReception() {
 }
 
 // TODO maybe refator into separate file
+/**
+ * @brief Gets the ID of the elevator.
+ *
+ * @return The ID of the elevator.
+ */
 func (e *elevatorState) GetID() int {
 	return int(e.id)
 }
 
+/**
+ * @brief Gets the current floor of the elevator.
+ *
+ * @return The current floor of the elevator.
+ */
 func (e *elevatorState) GetFloor() int {
 	return int(e.currFloor)
 }
 
+/**
+ * @brief Gets the current direction of the elevator.
+ *
+ * @return The current direction of the elevator.
+ */
 func (e *elevatorState) GetDirection() elevio.MotorDirection {
 	return e.currDirection
 }
 
+/**
+ * @brief Gets the requests of the elevator.
+ *
+ * @return A copy of the requests of the elevator.
+ */
 func (e *elevatorState) GetRequests() [][3]bool {
 	requestsCopy := make([][3]bool, len(e.request))
 	for i, requests := range e.request {
@@ -323,7 +357,9 @@ func (e *elevatorState) GetRequests() [][3]bool {
 	return requestsCopy
 }
 
-// We need to detect when an elevator is stuck, and reassign its Hall calls, otherwise we will stall the system
+/**
+ * @brief Detects if an elevator is stuck and sets its online flag accordingly.
+ */
 func (e *elevatorState) ElevatorStuck() {
 	e.timeSinceLastAction()
 	currDirection := e.GetDirection()
@@ -335,12 +371,15 @@ func (e *elevatorState) ElevatorStuck() {
 		TurnOffElevator(e.GetID())
 	}
 }
-//Move to a better place later
+
+// Move to a better place later
 var lastActionTime time.Time
 var prevFloor uint8
 var prevDirection elevio.MotorDirection
 
-// Updates the lastActionTime of an elevator if it changes direction or floor
+/**
+ * @brief Updates the lastActionTime of an elevator if it changes direction or floor.
+ */
 func (e *elevatorState) timeSinceLastAction() {
 	if e.currFloor != prevFloor || e.currDirection != prevDirection {
 		lastActionTime = time.Now()

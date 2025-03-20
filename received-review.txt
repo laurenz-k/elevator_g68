@@ -1,0 +1,10 @@
+Reviewer 1:
+7
+• The system handles a single elevator, but there is no entry point in the main function to start the system.
+• There are no comments explaining how the system files would be structured, so I can't provide feedback on that aspect. But remember to make different folders and not have everything as files with main. 
+• Wrong perception of "pure" functions. Functions should for the most part be purely logical and don't interact With the hardware. I would move the content of Run() to main and the content of each handle function to the Select case for a clearer state machine implementation. 
+• The single-elevator setup is easy to read, and the function names clearly indicate their purpose. It's also good to see that the system is state-based.
+• From the plan, it looks like you're implementing an order receiver, which will assign orders to the other elevators, along with a peer-to-peer communication system. However, it seems like you assume each elevator has its own hall lights. Keep in mind that cab calls are individual for each elevator, but hall lights should be synchronized across all elevators. May be a misunderstanding on my part. 
+• I would recommend creating a configuration file for global variables like numFloors, rather than defining them directly in main.
+• It seems like the planning of the Project is going well, but small amount of implemenation is done.
+

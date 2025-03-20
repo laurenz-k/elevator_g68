@@ -31,7 +31,7 @@ type elevatorState struct {
 	currDirection elevio.MotorDirection
 	request       [][3]bool
 	lastSync      time.Time
-	online        bool
+	offline       bool //changed from online to offline because bool is false by default. will be changed once we figure it out
 }
 
 /**
@@ -44,7 +44,7 @@ func TurnOnElevator(elevatorID int) {
 	defer mtx.Unlock()
 
 	if elevatorID < len(states) && states[elevatorID] != nil {
-		states[elevatorID].online = true
+		states[elevatorID].offline = false
 	}
 }
 
@@ -58,7 +58,7 @@ func TurnOffElevator(elevatorID int) {
 	defer mtx.Unlock()
 
 	if elevatorID < len(states) && states[elevatorID] != nil {
-		states[elevatorID].online = false
+		states[elevatorID].offline = true
 	}
 }
 
@@ -68,6 +68,8 @@ func TurnOffElevator(elevatorID int) {
  * @param elevatorPtr The current state of the elevator to broadcast.
  */
 func BroadcastState(elevatorPtr types.ElevatorState) {
+	
+	
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -79,7 +81,7 @@ func BroadcastState(elevatorPtr types.ElevatorState) {
 	nonce := uint32(0)
 
 	for range ticker.C {
-		if !myState.online {
+		if myState.offline {
 			continue
 		}
 		myState.id = uint8(elevatorPtr.GetID())
@@ -312,6 +314,7 @@ func HandleStateReception() {
 	// 1. In the ReceiveStates loop, check for errors on conn.Read.
 	// 2. If an error occurs, log it and possibly break the loop or retry.
 	// 3. Validate the length of the received data before attempting deserialization.
+	
 }
 
 // TODO maybe refator into separate file

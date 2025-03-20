@@ -10,8 +10,6 @@ import (
 	"time"
 )
 
-// TODO: Add a way to re-sync an elevator if it has been offline or out of sync for a while
-
 const broadcastAddr = "255.255.255.255"
 const broadcastPort = "15001"
 const interval = 100 * time.Millisecond
@@ -33,6 +31,35 @@ type elevatorState struct {
 	currDirection elevio.MotorDirection
 	request       [][3]bool
 	lastSync      time.Time
+	online        bool
+}
+
+/**
+ * @brief Turns the elevator on.
+ *
+ * @param elevatorID The ID of the elevator to turn on.
+ */
+func TurnOnElevator(elevatorID int) {
+	mtx.Lock()
+	defer mtx.Unlock()
+
+	if elevatorID < len(states) && states[elevatorID] != nil {
+		states[elevatorID].online = true
+	}
+}
+
+/**
+ * @brief Turns the elevator off.
+ *
+ * @param elevatorID The ID of the elevator to turn off.
+ */
+func TurnOffElevator(elevatorID int) {
+	mtx.Lock()
+	defer mtx.Unlock()
+
+	if elevatorID < len(states) && states[elevatorID] != nil {
+		states[elevatorID].online = false
+	}
 }
 
 /**
@@ -52,6 +79,9 @@ func BroadcastState(elevatorPtr types.ElevatorState) {
 	nonce := uint32(0)
 
 	for range ticker.C {
+		if !myState.online {
+			continue
+		}
 		myState.id = uint8(elevatorPtr.GetID())
 		myState.nonce = nonce
 		myState.currFloor = uint8(elevatorPtr.GetFloor())
@@ -197,8 +227,8 @@ func deserialize(m []byte) *elevatorState {
 	}
 
 	offset := 7
-	for i := offset; i < len(m); i += 3 {
-		currRow := [...]bool{m[i] == 1, m[i+1] == 1, m[i+2] == 1}
+	for i := offset; i < len(m); i += 2 {
+		currRow := [3]bool{m[i] == 1, m[i+1] == 1}
 		elevatorState.request = append(elevatorState.request, currRow)
 	}
 
@@ -261,18 +291,6 @@ func orAggregateAllLiveRequests() [][2]bool {
 	return aggMatrix
 }
 
-// Potential issue: If the elevator has been offline for too long, a direct state request might time out.
-// Consider implementing a retry mechanism or fallback to a safe state.
-//
-// ResyncElevatorState should be triggered when an elevator is detected to be out of sync.
-func ResyncElevatorState(elevatorID int) {
-	// TODO:
-	// 1. Broadcast a state request for the specified elevator.
-	// 2. Wait for responses from peers or the master node.
-	// 3. If a valid state is received, update the local state accordingly.
-	// 4. If no response is received within a timeout, mark the elevator as offline and trigger order reassignments.
-}
-
 // Helps with improving error checking for receiving and processing state messages over UDP.
 // (Not sure if this is needed but can be nice for testing at least, so we dont try to fix something that not broken)
 func HandleStateReception() {
@@ -308,7 +326,7 @@ func (e *elevatorState) GetRequests() [][3]bool {
 // We need to detect when an elevator is stuck, and reassign its Hall calls, otherwise we will stall the system
 func ElevatorStuck() {
 	// TODO:
-	// 1. Get the state of that elevaotr. If it is idle, or the door is open on a floor, this elevator is not stuck
+	// 1. Get the state of that elevator. If it is idle, or the door is open on a floor, this elevator is not stuck
 	// 2. If the elevator is moving, check when the last time was that the floor changed.
 	// 2. IF the floor has not changed in a while, Assume elevtator is stuck and go offline.
 }

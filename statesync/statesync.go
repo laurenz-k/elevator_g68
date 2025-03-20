@@ -282,6 +282,29 @@ func HandleStateReception() {
 	// 3. Validate the length of the received data before attempting deserialization.
 }
 
+// TODO maybe refator into separate file
+func (e *elevatorState) GetID() int {
+	return int(e.id)
+}
+
+func (e *elevatorState) GetFloor() int {
+	return int(e.currFloor)
+}
+
+func (e *elevatorState) GetDirection() elevio.MotorDirection {
+	return e.currDirection
+}
+
+func (e *elevatorState) GetRequests() [][3]bool {
+	requestsCopy := make([][3]bool, len(e.request))
+	for i, requests := range e.request {
+		requestsCopy[i][elevio.BT_HallUp] = requests[elevio.BT_HallUp]
+		requestsCopy[i][elevio.BT_HallDown] = requests[elevio.BT_HallDown]
+		requestsCopy[i][elevio.BT_Cab] = requests[elevio.BT_Cab]
+	}
+	return requestsCopy
+}
+
 // We need to detect when an elevator is stuck, and reassign its Hall calls, otherwise we will stall the system
 func ElevatorStuck() {
 	// TODO:

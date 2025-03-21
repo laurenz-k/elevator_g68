@@ -68,8 +68,7 @@ func TurnOffElevator(elevatorID int) {
  * @param elevatorPtr The current state of the elevator to broadcast.
  */
 func BroadcastState(elevatorPtr types.ElevatorState) {
-	
-	
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -173,14 +172,15 @@ func GetState(elevatorID int) *elevatorState {
  *
  * @return A slice of active elevator IDs.
  */
-func GetAliveElevatorIDs() []int {
+func GetAliveElevatorIDs(thisElevatorID int) []int {
 	mtx.RLock()
 	defer mtx.RUnlock()
 
 	// TODO must always return the elevators own ID => otherwise system becomes irresponsive
+	// This TODO should be resolved at the cost of having to pass ones own ID
 	alive := make([]int, 0, len(states))
 	for id, s := range states {
-		if s != nil && time.Since(s.lastSync) <= syncTimeout {
+		if s != nil && (id == thisElevatorID || time.Since(s.lastSync) <= syncTimeout) {
 			alive = append(alive, id)
 		}
 	}
@@ -318,7 +318,7 @@ func HandleStateReception() {
 	// 1. In the ReceiveStates loop, check for errors on conn.Read.
 	// 2. If an error occurs, log it and possibly break the loop or retry.
 	// 3. Validate the length of the received data before attempting deserialization.
-	
+
 }
 
 // TODO maybe refator into separate file

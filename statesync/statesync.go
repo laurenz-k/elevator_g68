@@ -16,22 +16,15 @@ const interval = 100 * time.Millisecond
 const syncTimeout = 1 * time.Second
 
 var mtx sync.RWMutex
-
-// We store states by elevator id (index in the slice).
 var states = make([]*elevatorState, 0, 10)
+var thisElevatorID int
 
-// ButtonPressChan is used to notify the controller to reassign orders
-// when an elevator is detected as failed.
-// var ButtonPressChan chan elevio.ButtonEvent
+func StartStatesync(elevator types.ElevatorState, reassignmentChan chan elevio.ButtonEvent) {
+	thisElevatorID = elevator.GetID()
 
-type elevatorState struct {
-	id            int
-	nonce         int
-	currFloor     int
-	currDirection elevio.MotorDirection
-	request       [][3]bool
-	lastSync      time.Time
-	offline       bool //changed from online to offline because bool is false by default. will be changed once we figure it out
+	go broadcastState(elevator)
+	go receiveStates()
+	go monitorFailedSyncs(reassignmentChan)
 }
 
 /**
@@ -67,7 +60,7 @@ func TurnOffElevator(elevatorID int) {
  *
  * @param elevatorPtr The current state of the elevator to broadcast.
  */
-func BroadcastState(elevatorPtr types.ElevatorState) {
+func broadcastState(elevatorPtr types.ElevatorState) {
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -98,7 +91,7 @@ func BroadcastState(elevatorPtr types.ElevatorState) {
 /**
  * @brief Listens for incoming elevator states over UDP and updates local states.
  */
-func ReceiveStates() {
+func receiveStates() {
 	addr, _ := net.ResolveUDPAddr("udp", ":"+broadcastPort)
 	conn, _ := net.ListenUDP("udp", addr)
 	defer conn.Close()
@@ -117,38 +110,36 @@ func ReceiveStates() {
 /**
  * @brief Monitors elevator states and reassigns orders if an elevator is out of sync.
  */
-func MonitorFailedSyncs() {
+func monitorFailedSyncs(reassignmentChan chan elevio.ButtonEvent) {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		mtx.Lock()
+		mtx.RLock()
 		for id, s := range states {
 			if s == nil {
 				continue
 			}
 			if time.Since(s.lastSync) > syncTimeout {
 				log.Printf("Elevator %d has not synced for over %v. Reassigning orders.", id, syncTimeout)
-				/*for floor, order := range s.request {
+
+				for floor, order := range s.request {
 					for btn, active := range order {
 						if active {
-							event := elevio.ButtonEvent{
+
+							reassignmentChan <- elevio.ButtonEvent{
 								Floor:  floor,
 								Button: elevio.ButtonType(btn),
 							}
-							if ButtonPressChan != nil {
-								ButtonPressChan <- event
-							} else {
-								log.Printf("ButtonPressChan is nil; cannot reassign order: %+v", event)
-							}
-							// Clear the order after reassigning.
+
 							s.request[floor][btn] = false
 						}
 					}
-				}*/
+				}
+				states[id] = nil
 			}
 		}
-		mtx.Unlock()
+		mtx.RUnlock()
 	}
 }
 
@@ -158,7 +149,7 @@ func MonitorFailedSyncs() {
  * @param elevatorID The ID of the elevator.
  * @return Pointer to the elevatorState, or nil if not found.
  */
-func GetState(elevatorID int) *elevatorState {
+func GetState(elevatorID int) types.ElevatorState {
 	mtx.RLock()
 	defer mtx.RUnlock()
 	if elevatorID < len(states) {
@@ -172,15 +163,15 @@ func GetState(elevatorID int) *elevatorState {
  *
  * @return A slice of active elevator IDs.
  */
-func GetAliveElevatorIDs(thisElevatorID int) []int {
+func GetAliveElevatorIDs() []int {
 	mtx.RLock()
 	defer mtx.RUnlock()
 
-	// TODO must always return the elevators own ID => otherwise system becomes irresponsive
-	// This TODO should be resolved at the cost of having to pass ones own ID
 	alive := make([]int, 0, len(states))
+	alive = append(alive, thisElevatorID)
+
 	for id, s := range states {
-		if s != nil && (id == thisElevatorID || time.Since(s.lastSync) <= syncTimeout) {
+		if s != nil && time.Since(s.lastSync) <= syncTimeout {
 			alive = append(alive, id)
 		}
 	}
@@ -258,9 +249,9 @@ func updateStates(s *elevatorState) {
 	}
 }
 
-// TODO potential code quality issue
-// problem: fires on every state receive => sets lights very often
-// solution: only set light when there's an actual change
+// NOTE laurenz-k: maybe refactor to controller?
+var prevHallButtonLights [][2]bool
+
 /**
  * @brief Lights up the hall buttons based on the aggregated requests.
  */
@@ -269,9 +260,13 @@ func lightHallButtons() {
 
 	for i, row := range buttonsToLight {
 		for j, val := range row {
-			elevio.SetButtonLamp(elevio.ButtonType(j), i, val)
+			if prevHallButtonLights == nil || prevHallButtonLights[i][j] != val {
+				elevio.SetButtonLamp(elevio.ButtonType(j), i, val)
+			}
 		}
 	}
+
+	prevHallButtonLights = buttonsToLight
 }
 
 /**
@@ -321,49 +316,7 @@ func HandleStateReception() {
 
 }
 
-// TODO maybe refator into separate file
-/**
- * @brief Gets the ID of the elevator.
- *
- * @return The ID of the elevator.
- */
-func (e *elevatorState) GetID() int {
-	return int(e.id)
-}
-
-/**
- * @brief Gets the current floor of the elevator.
- *
- * @return The current floor of the elevator.
- */
-func (e *elevatorState) GetFloor() int {
-	return int(e.currFloor)
-}
-
-/**
- * @brief Gets the current direction of the elevator.
- *
- * @return The current direction of the elevator.
- */
-func (e *elevatorState) GetDirection() elevio.MotorDirection {
-	return e.currDirection
-}
-
-/**
- * @brief Gets the requests of the elevator.
- *
- * @return A copy of the requests of the elevator.
- */
-func (e *elevatorState) GetRequests() [][3]bool {
-	requestsCopy := make([][3]bool, len(e.request))
-	for i, requests := range e.request {
-		requestsCopy[i][elevio.BT_HallUp] = requests[elevio.BT_HallUp]
-		requestsCopy[i][elevio.BT_HallDown] = requests[elevio.BT_HallDown]
-		requestsCopy[i][elevio.BT_Cab] = requests[elevio.BT_Cab]
-	}
-	return requestsCopy
-}
-
+// fits better with controller??
 /**
  * @brief Detects if an elevator is stuck and sets its online flag accordingly.
  */

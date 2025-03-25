@@ -9,6 +9,9 @@ import (
 	sts "elevator/statesync"
 )
 
+// TODO stop panicing
+// TODO laurenz-k assignment message gets dropped => Spam assignments; maybe spam until we see it in the state of assignment receiver
+// TODO laurenz-k increase heartbeat interval
 func StartControlLoop(id int, driverAddr string, numFloors int) {
 
 	elevator := setup(id, driverAddr, numFloors)
@@ -33,6 +36,7 @@ func StartControlLoop(id int, driverAddr string, numFloors int) {
 			elevator.handleButtonPress(a)
 
 		case a := <-asg_buttons:
+			log.Printf("Reveived assignment: %+v\n", a)
 			elevator.addRequest(a)
 
 		case a := <-drv_floors:
@@ -86,6 +90,7 @@ func (e *elevator) handleButtonPress(b elevio.ButtonEvent) {
 func (e *elevator) addRequest(b elevio.ButtonEvent) {
 	e.requests[b.Floor][b.Button] = true
 
+	// TODO laurenz-k
 	// function to blast out states in statesync?
 	// pause 1 second to ensure 10 heartbeats have been sent before lighting the button
 	// TODO issue: causes delay for lighting button => appearance of irresponsiveness
@@ -165,7 +170,7 @@ func (e *elevator) openAndCloseDoor() {
 
 	e.setCabButtonLights()
 
-	time.AfterFunc(1*time.Second, func() {
+	time.AfterFunc(3*time.Second, func() {
 		for e.doorObstructed {
 			time.Sleep(20 * time.Millisecond)
 		}

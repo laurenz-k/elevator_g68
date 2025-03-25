@@ -29,3 +29,12 @@ We are considering adapting the reassignment scheme such that first an elevator 
 
 ## Open Questions
 - Do we need the cyclic counters presented in lectures for this solution? We believe not, since in our implementation each elevator manages it's own state. Other elevators only have read access to it so no inconsistencies can occur.
+
+
+## FAT Commands
+- `elevatorserver`
+- `go run main.go -id <n>` where n=0..
+- `sudo packetloss -p 20068,15001 -r 0.6` to set up packetloss on our ports
+
+## Working versions
+- 6f1763f27cbcdb8bf35f7233210e22589891f549 tested 25.3.25

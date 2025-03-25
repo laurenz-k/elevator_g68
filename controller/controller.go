@@ -19,9 +19,7 @@ func StartControlLoop(id int, driverAddr string, numFloors int) {
 	drv_stop := make(chan bool)
 	asg_buttons := make(chan elevio.ButtonEvent)
 
-	go sts.BroadcastState(elevator)
-	go sts.ReceiveStates()
-	go sts.MonitorFailedSyncs()
+	sts.StartStatesync(elevator, drv_buttons)
 
 	go elevio.PollButtons(drv_buttons)
 	go elevio.PollFloorSensor(drv_floors)
@@ -50,6 +48,7 @@ func StartControlLoop(id int, driverAddr string, numFloors int) {
 }
 
 func setup(id int, driverAddr string, numFloors int) *elevator {
+	// TODO laurenz-k persist hall calls and restore on restarts
 	elevio.Init(driverAddr, numFloors)
 
 	betweenFloors := elevio.GetFloor() == -1
@@ -87,10 +86,10 @@ func (e *elevator) handleButtonPress(b elevio.ButtonEvent) {
 func (e *elevator) addRequest(b elevio.ButtonEvent) {
 	e.requests[b.Floor][b.Button] = true
 
+	// function to blast out states in statesync?
 	// pause 1 second to ensure 10 heartbeats have been sent before lighting the button
 	// TODO issue: causes delay for lighting button => appearance of irresponsiveness
 	// TODO solution: blast out state n times => then continue
-	// time.Sleep(1 * time.Second)
 
 	switch e.state {
 	case ST_Idle:

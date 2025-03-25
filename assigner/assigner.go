@@ -192,16 +192,3 @@ func ReassignTasksForDisconnectedElevator(disconnectedID int) {
 		}
 	}
 }
-
-// Might not be nessecary - Dont implement yet :)
-// If the master is down or busy, or if theres any scenario where we cant immediately assign
-// a hall call, we can store it in a FIFO queue. Once the master is ready or a new master
-// is elected, we pop from the queue and run the assignment. This way we dont lose any button presses
-// (not super important as long as we dont light up the button before losing it!)
-//
-// Insert a new call into the unassigned queue, to be handled when a master is present.
-func AddUnassignedTask(call elevio.ButtonEvent) {
-	// TODO:
-	// 1. Push the call onto a queue or list of unassigned tasks.
-	// 2. Optionally broadcast that a new unassigned task is pending (so the master can pick it up).
-}

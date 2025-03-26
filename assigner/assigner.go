@@ -8,6 +8,7 @@ import (
 
 const broadcastAddr = "255.255.255.255"
 const broadcastPort = "20068"
+const transmissionBatchSize = 10
 
 type Assignment struct {
 	ElevatorID int
@@ -21,7 +22,7 @@ type Assignment struct {
  * @param aliveElevators The IDs of the alive elevators.
  * @return The ID of the elevator with the lowest cost.
  */
-func Cost(call elevio.ButtonEvent, aliveElevators []int) int {
+func cost(call elevio.ButtonEvent, aliveElevators []int) int {
 	lowestcost := 1000
 	lowestcostID := 0
 
@@ -73,14 +74,14 @@ func Cost(call elevio.ButtonEvent, aliveElevators []int) int {
  */
 func Assign(request elevio.ButtonEvent) {
 	//Check if the call is already assigned to an elevator
-	if allreadyAssigned(request) {
+	if alreadyAssigned(request) {
 		return
 	}
 	//Obtain states of alive elevators, calculate their costs. Lowest cost wins. In a draw, lowest/highest ID wins.
 	aliveIDs := statesync.GetAliveElevatorIDs()
 	//Go through the costs of all elevators in loop with. Lowest wins.
 
-	winnerElevatorID := Cost(request, aliveIDs)
+	winnerElevatorID := cost(request, aliveIDs)
 
 	addr := broadcastAddr + ":" + broadcastPort
 	conn, _ := net.Dial("udp", addr)
@@ -92,7 +93,10 @@ func Assign(request elevio.ButtonEvent) {
 		Button:     request,
 	}
 
-	conn.Write(serializeAssignment(assignment))
+	// TODO might have to deduplicate by using nonce....
+	for range transmissionBatchSize {
+		conn.Write(serializeAssignment(assignment))
+	}
 }
 
 /**
@@ -100,7 +104,7 @@ func Assign(request elevio.ButtonEvent) {
  *
  * @param request The call to be checked.
  */
-func allreadyAssigned(request elevio.ButtonEvent) bool {
+func alreadyAssigned(request elevio.ButtonEvent) bool {
 	aliveIDs := statesync.GetAliveElevatorIDs()
 	for _, elevatorID := range aliveIDs {
 		state := statesync.GetState(elevatorID)
@@ -176,14 +180,14 @@ func ReassignTasksForDisconnectedElevator(disconnectedID int) {
 	// 4. Assign them to the best available elevator.
 	disconnectedState := statesync.GetState(disconnectedID)
 	for floor, order := range disconnectedState.GetRequests() { //Goes through each floor,
-		if order[0] { //looks for hall calls assigned to the dead elevator,
+		if order[elevio.BT_HallUp] { //looks for hall calls assigned to the dead elevator,
 			event := elevio.ButtonEvent{ //assigns them to a new one.
 				Floor:  floor,
 				Button: elevio.ButtonType(elevio.BT_HallUp),
 			}
 			Assign(event)
 		}
-		if order[1] {
+		if order[elevio.BT_HallDown] {
 			event := elevio.ButtonEvent{
 				Floor:  floor,
 				Button: elevio.ButtonType(elevio.BT_HallDown),

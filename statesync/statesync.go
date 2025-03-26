@@ -13,7 +13,7 @@ import (
 const broadcastAddr = "255.255.255.255"
 const broadcastPort = "15001"
 const interval = 25 * time.Millisecond
-const syncTimeout = 1 * time.Second
+const syncTimeout = 3 * time.Second
 
 var mtx sync.RWMutex
 var states = make([]*elevatorState, 0, 10)

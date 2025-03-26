@@ -204,6 +204,7 @@ func GetAliveElevatorIDs() []int {
 			alive = append(alive, id)
 		}
 	}
+	log.Printf("Alive elevators: %v", alive)
 	return alive
 }
 
@@ -349,7 +350,7 @@ func ElevatorStuck(elevator types.ElevatorState, errorChan chan string) {
 		}
 	}
 	if (hasActiveCalls) && (time.Since(lastActionTime) > 5*time.Second) {
-		log.Printf("Elevator stuck with no active calls and last action time %v", time.Since(lastActionTime))
+		log.Printf("Elevator stuck with active calls and last action time %v", time.Since(lastActionTime))
 		errorChan <- "Elevator stuck"
 	}
 }

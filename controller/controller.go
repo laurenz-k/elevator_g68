@@ -130,8 +130,10 @@ func (e *elevator) handleFloorChange(floorNum int, errorChan chan string) {
 
 	case ST_Idle:
 		errorChan <- "Unexpected move"
+		println("Stuck in Unexpected move error")
 	case ST_DoorOpen:
 		errorChan <- "Door open move"
+		println("Stuck in Door open move error")
 	}
 }
 
@@ -143,8 +145,10 @@ func (e *elevator) handleDoorObstruction(isObstructed bool, errorChan chan strin
 		e.doorObstructed = isObstructed
 	case ST_Moving:
 		errorChan <- "Door obstruction moving"
+		println("Stuck in Door obstruction error moving")
 	case ST_Idle:
 		errorChan <- "Door obstruction idle"
+		println("Stuck in Door obstruction error idle")
 	}
 }
 

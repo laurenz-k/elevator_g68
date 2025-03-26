@@ -34,9 +34,7 @@ func StartControlLoop(id int, driverAddr string, numFloors int) {
 			elevator.handleButtonPress(a)
 
 		case a := <-asg_buttons:
-			// TODO log only on first assignment received
-			log.Printf("Received assignment: %+v\n", a)
-			elevator.addRequest(a)
+			elevator.handleAssignment(a)
 
 		case a := <-drv_floors:
 			elevator.handleFloorChange(a, error_chan)
@@ -88,6 +86,13 @@ func (e *elevator) handleButtonPress(b elevio.ButtonEvent) {
 	} else {
 		asg.Assign(b)
 	}
+}
+
+func (e *elevator) handleAssignment(b elevio.ButtonEvent) {
+	if !e.requests[b.Floor][b.Button] {
+		log.Printf("Received assignment: %+v\n", b)
+	}
+	e.addRequest(b)
 }
 
 func (e *elevator) addRequest(b elevio.ButtonEvent) {

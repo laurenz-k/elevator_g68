@@ -23,6 +23,7 @@ type Assignment struct {
  * @return The ID of the elevator with the lowest cost.
  */
 func cost(call elevio.ButtonEvent, aliveElevators []int) int {
+	// TODO we should't assign to an elevator that's currently obstructed
 	lowestcost := 1000
 	lowestcostID := 0
 

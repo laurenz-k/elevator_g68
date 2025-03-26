@@ -337,7 +337,7 @@ func orAggregateAllLiveRequests() [][2]bool {
 func ElevatorStuck(elevator types.ElevatorState, errorChan chan string) {
 	timeSinceLastAction(elevator)
 	currDirection := elevator.GetDirection()
-	if time.Since(lastActionTime) > 5 && currDirection != 0 {
+	if (time.Since(lastActionTime) > 5*time.Second) && (currDirection != 0) {
 		log.Printf("Elevator stuck with last action time %v", time.Since(lastActionTime))
 		errorChan <- "Elevator stuck"
 	}

@@ -270,7 +270,10 @@ func (e *elevator) handleErrors(errorChan chan string) {
 			for elevio.GetFloor() == -1 {
 				time.Sleep(20 * time.Millisecond)
 			}
+			floorNum := elevio.GetFloor()
 			elevio.SetMotorDirection(elevio.MD_Stop)
+			e.floor = floorNum
+			elevio.SetFloorIndicator(floorNum)
 		}
 	case "Door open move":
 		if e.floor != -1 {
@@ -291,6 +294,7 @@ func (e *elevator) handleErrors(errorChan chan string) {
 				time.Sleep(20 * time.Millisecond)
 			}
 			elevio.SetMotorDirection(elevio.MD_Stop)
+			e.doorObstructed = true
 			e.state = ST_DoorOpen
 		}
 	}

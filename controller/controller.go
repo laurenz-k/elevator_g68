@@ -151,9 +151,11 @@ func (e *elevator) handleDoorObstruction(isObstructed bool, errorChan chan strin
 	case ST_Moving:
 		errorChan <- "Door obstruction moving"
 		log.Printf("Stuck in Door obstruction error moving")
+		e.doorObstructed = isObstructed
 	case ST_Idle:
 		errorChan <- "Door obstruction idle"
 		log.Printf("Stuck in Door obstruction error idle")
+		e.doorObstructed = isObstructed
 	}
 }
 

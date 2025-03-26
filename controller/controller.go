@@ -267,6 +267,7 @@ func (e *elevator) handleErrors(errorChan chan string) {
 			elevio.SetMotorDirection(elevio.MD_Stop)
 			e.state = ST_Idle
 		} else {
+			elevio.SetMotorDirection(elevio.MD_Down)
 			for elevio.GetFloor() == -1 {
 				time.Sleep(20 * time.Millisecond)
 			}
@@ -280,6 +281,7 @@ func (e *elevator) handleErrors(errorChan chan string) {
 			elevio.SetMotorDirection(elevio.MD_Stop)
 			e.state = ST_Idle
 		} else {
+			elevio.SetMotorDirection(elevio.MD_Down)
 			for elevio.GetFloor() == -1 {
 				time.Sleep(20 * time.Millisecond)
 			}
@@ -290,6 +292,7 @@ func (e *elevator) handleErrors(errorChan chan string) {
 			elevio.SetMotorDirection(elevio.MD_Stop)
 			e.state = ST_DoorOpen
 		} else {
+			elevio.SetMotorDirection(elevio.MD_Down)
 			for elevio.GetFloor() == -1 {
 				time.Sleep(20 * time.Millisecond)
 			}

@@ -179,6 +179,13 @@ func (e *elevator) openAndCloseDoor() {
 	})
 }
 
+func (e *elevator) openDoor(){
+	e.state = ST_DoorOpen
+	e.direction = elevio.MD_Stop
+
+	elevio.SetDoorOpenLamp(true)
+}
+
 func (e *elevator) stopOnCurrentFloor() bool {
 	if e.direction == elevio.MD_Up {
 		return (e.requests[e.floor][elevio.BT_Cab] ||
@@ -264,26 +271,29 @@ func (e *elevator) setCabButtonLights() {
 }
 
 func (e *elevator) handleErrors(errorChan chan string) {
+	myID := e.id
 	err := <-errorChan
 	switch err {
 	case "Unexpected move":
+		sts.TurnOffElevator(myID)
 		if elevio.GetFloor() != -1 {
 			elevio.SetMotorDirection(elevio.MD_Stop)
 			e.state = ST_Idle
+			sts.TurnOnElevator(myID)
 		} else {
 			elevio.SetMotorDirection(elevio.MD_Down)
 			for elevio.GetFloor() == -1 {
 				time.Sleep(20 * time.Millisecond)
 			}
-			floorNum := elevio.GetFloor()
-			elevio.SetMotorDirection(elevio.MD_Stop)
-			e.floor = floorNum
-			elevio.SetFloorIndicator(floorNum)
+			e.openAndCloseDoor()
+			sts.TurnOnElevator(myID)
+
 		}
 	case "Door open move":
+		
 		if elevio.GetFloor() != -1 {
 			elevio.SetMotorDirection(elevio.MD_Stop)
-			e.state = ST_Idle
+			e.openAndCloseDoor()
 		} else {
 			elevio.SetMotorDirection(elevio.MD_Down)
 			for elevio.GetFloor() == -1 {
@@ -291,18 +301,21 @@ func (e *elevator) handleErrors(errorChan chan string) {
 			}
 			e.openAndCloseDoor()
 		}
-	case "Door obstruction moving", "Door obstruction idle":
+	case "Door obstruction moving":
+		sts.TurnOffElevator(myID)
 		if elevio.GetFloor() != -1 {
 			elevio.SetMotorDirection(elevio.MD_Stop)
-			e.state = ST_DoorOpen
+			e.openDoor()
+			sts.TurnOnElevator(myID)
 		} else {
 			elevio.SetMotorDirection(elevio.MD_Down)
 			for elevio.GetFloor() == -1 {
 				time.Sleep(20 * time.Millisecond)
 			}
-			elevio.SetMotorDirection(elevio.MD_Stop)
-			e.doorObstructed = true
-			e.state = ST_DoorOpen
+			e.openDoor()
+			sts.TurnOnElevator(myID)
 		}
+	case "Door obstruction idle":
+		e.openDoor()
 	}
 }

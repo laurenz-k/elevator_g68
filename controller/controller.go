@@ -10,16 +10,14 @@ import (
 )
 
 func StartControlLoop(id int, driverAddr string, numFloors int) {
-
-	elevator := setup(id, driverAddr, numFloors)
-
 	drv_buttons := make(chan elevio.ButtonEvent)
 	drv_floors := make(chan int)
 	drv_obstr := make(chan bool)
 	drv_stop := make(chan bool)
 	asg_buttons := make(chan elevio.ButtonEvent)
-
 	error_chan := make(chan string)
+
+	elevator := setup(id, driverAddr, numFloors)
 
 	sts.StartStatesync(elevator, drv_buttons, error_chan)
 
@@ -76,6 +74,7 @@ func setup(id int, driverAddr string, numFloors int) *elevator {
 
 	// dispatch test
 	elevator.setNextDirection(elevio.MD_Stop)
+	elevio.SetMotorDirection(elevator.direction)
 
 	elevator.setCabButtonLights()
 	return elevator
@@ -95,7 +94,7 @@ func (e *elevator) addRequest(b elevio.ButtonEvent) {
 	e.requests[b.Floor][b.Button] = true
 	flushRequests(e.requests)
 
-	// TODO test reassignment => do we need to blast here or is regular heartbeat enough?
+	// TODO test reassignment => do we need to blast here or is regular heartbeat enough? test in insane network impairment mode
 
 	switch e.state {
 	case ST_Idle:
@@ -185,7 +184,6 @@ func (e *elevator) openAndCloseDoor() {
 		elevio.SetMotorDirection(e.direction)
 	})
 }
-
 
 func (e *elevator) stopOnCurrentFloor() bool {
 	if e.direction == elevio.MD_Up {
@@ -284,6 +282,7 @@ func (e *elevator) handleErrors(errorChan chan string) {
 				e.state = ST_Idle
 				sts.TurnOnElevator(myID)
 			} else {
+				// TODO test out of range stuff
 				elevio.SetMotorDirection(elevio.MD_Down)
 				for elevio.GetFloor() == -1 {
 					time.Sleep(20 * time.Millisecond)
@@ -291,13 +290,13 @@ func (e *elevator) handleErrors(errorChan chan string) {
 				e.openAndCloseDoor()
 				sts.TurnOnElevator(myID)
 
-		}
-	
+			}
+
 		case "Door obstruction moving":
 			sts.TurnOffElevator(myID)
 			if elevio.GetFloor() != -1 {
 				elevio.SetMotorDirection(elevio.MD_Stop)
-			
+
 			} else {
 				elevio.SetMotorDirection(elevio.MD_Down)
 				for elevio.GetFloor() == -1 {

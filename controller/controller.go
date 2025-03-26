@@ -9,7 +9,6 @@ import (
 	sts "elevator/statesync"
 )
 
-// TODO stop panicing
 func StartControlLoop(id int, driverAddr string, numFloors int) {
 
 	elevator := setup(id, driverAddr, numFloors)

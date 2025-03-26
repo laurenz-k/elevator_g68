@@ -10,8 +10,6 @@ import (
 )
 
 // TODO stop panicing
-// TODO laurenz-k assignment message gets dropped => Spam assignments; maybe spam until we see it in the state of assignment receiver
-// TODO laurenz-k increase heartbeat interval
 func StartControlLoop(id int, driverAddr string, numFloors int) {
 
 	elevator := setup(id, driverAddr, numFloors)
@@ -23,7 +21,6 @@ func StartControlLoop(id int, driverAddr string, numFloors int) {
 	asg_buttons := make(chan elevio.ButtonEvent)
 
 	error_chan := make(chan string)
-
 
 	sts.StartStatesync(elevator, drv_buttons, error_chan)
 
@@ -73,7 +70,7 @@ func setup(id int, driverAddr string, numFloors int) *elevator {
 		state:          ST_Idle,
 		floor:          elevio.GetFloor(),
 		direction:      elevio.MD_Stop,
-		requests:       make([][3]bool, numFloors),
+		requests:       restoreRequests(numFloors),
 		doorObstructed: false,
 	}
 	elevator.setCabButtonLights()
@@ -92,12 +89,9 @@ func (e *elevator) handleButtonPress(b elevio.ButtonEvent) {
 
 func (e *elevator) addRequest(b elevio.ButtonEvent) {
 	e.requests[b.Floor][b.Button] = true
+	flushRequests(e.requests)
 
-	// TODO laurenz-k
-	// function to blast out states in statesync?
-	// pause 1 second to ensure 10 heartbeats have been sent before lighting the button
-	// TODO issue: causes delay for lighting button => appearance of irresponsiveness
-	// TODO solution: blast out state n times => then continue
+	// TODO test reassignment => do we need to blast here or is regular heartbeat enough?
 
 	switch e.state {
 	case ST_Idle:

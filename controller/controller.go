@@ -22,7 +22,10 @@ func StartControlLoop(id int, driverAddr string, numFloors int) {
 	drv_stop := make(chan bool)
 	asg_buttons := make(chan elevio.ButtonEvent)
 
-	sts.StartStatesync(elevator, drv_buttons)
+	error_chan := make(chan string)
+
+
+	sts.StartStatesync(elevator, drv_buttons, error_chan)
 
 	go elevio.PollButtons(drv_buttons)
 	go elevio.PollFloorSensor(drv_floors)
@@ -120,7 +123,7 @@ func (e *elevator) addRequest(b elevio.ButtonEvent) {
 	e.setCabButtonLights()
 }
 
-func (e *elevator) handleFloorChange(floorNum int) {
+func (e *elevator) handleFloorChange(floorNum int, errorChan chan string) {
 	log.Printf("floor changed %+v\n", floorNum)
 
 	switch e.state {
@@ -133,14 +136,13 @@ func (e *elevator) handleFloorChange(floorNum int) {
 		}
 
 	case ST_Idle:
-		panic("Floor changed in state \"ST_Idle\"")
-
+		errorChan <- "Unexpected move"
 	case ST_DoorOpen:
-		panic("Floor changed in state \"ST_DoorOpen\"")
+		errorChan <- "Door open move"
 	}
 }
 
-func (e *elevator) handleDoorObstruction(isObstructed bool) {
+func (e *elevator) handleDoorObstruction(isObstructed bool, errorChan chan string) {
 	log.Printf("Door obstruction %+v\n", isObstructed)
 
 	switch e.state {
@@ -148,10 +150,9 @@ func (e *elevator) handleDoorObstruction(isObstructed bool) {
 		e.doorObstructed = isObstructed
 
 	case ST_Moving:
-		panic("Door obstructed in state \"ST_Moving\"")
-
+		errorChan <- "Door obstruction moving"
 	case ST_Idle:
-		panic("Door obstructed in state \"ST_Idle\"")
+		errorChan <- "Door obstruction idle"
 	}
 }
 

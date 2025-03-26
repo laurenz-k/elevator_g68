@@ -15,11 +15,13 @@ const broadcastPort = "15001"
 const interval = 100 * time.Millisecond
 const syncTimeout = 1 * time.Second
 
+
+
 var mtx sync.RWMutex
 var states = make([]*elevatorState, 0, 10)
 var thisElevatorID int
 
-func StartStatesync(elevator types.ElevatorState, reassignmentChan chan elevio.ButtonEvent) {
+func StartStatesync(elevator types.ElevatorState, reassignmentChan chan elevio.ButtonEvent, errorChan chan string) {
 	thisElevatorID = elevator.GetID()
 
 	go broadcastState(elevator)

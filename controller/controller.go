@@ -31,7 +31,6 @@ func StartControlLoop(id int, driverAddr string, numFloors int) {
 	go asg.ReceiveAssignments(asg_buttons, id)
 	go elevator.handleErrors(error_chan)
 
-
 	for {
 		select {
 		case a := <-drv_buttons:
@@ -54,7 +53,6 @@ func StartControlLoop(id int, driverAddr string, numFloors int) {
 }
 
 func setup(id int, driverAddr string, numFloors int) *elevator {
-	// TODO laurenz-k persist hall calls and restore on restarts
 	elevio.Init(driverAddr, numFloors)
 
 	betweenFloors := elevio.GetFloor() == -1

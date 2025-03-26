@@ -135,8 +135,10 @@ func (e *elevator) handleFloorChange(floorNum int, errorChan chan string) {
 
 	case ST_Idle:
 		errorChan <- "Unexpected move"
+		log.Printf("Stuck in Unexpected move error")
 	case ST_DoorOpen:
 		errorChan <- "Door open move"
+		log.Printf("Stuck in Door open move error")
 	}
 }
 
@@ -148,8 +150,10 @@ func (e *elevator) handleDoorObstruction(isObstructed bool, errorChan chan strin
 		e.doorObstructed = isObstructed
 	case ST_Moving:
 		errorChan <- "Door obstruction moving"
+		log.Printf("Stuck in Door obstruction error moving")
 	case ST_Idle:
 		errorChan <- "Door obstruction idle"
+		log.Printf("Stuck in Door obstruction error idle")
 	}
 }
 
@@ -269,34 +273,41 @@ func (e *elevator) handleErrors(errorChan chan string) {
 	err := <-errorChan
 	switch err {
 	case "Unexpected move":
-		if e.floor != -1 {
+		if elevio.GetFloor() != -1 {
 			elevio.SetMotorDirection(elevio.MD_Stop)
 			e.state = ST_Idle
 		} else {
+			elevio.SetMotorDirection(elevio.MD_Down)
 			for elevio.GetFloor() == -1 {
 				time.Sleep(20 * time.Millisecond)
 			}
+			floorNum := elevio.GetFloor()
 			elevio.SetMotorDirection(elevio.MD_Stop)
+			e.floor = floorNum
+			elevio.SetFloorIndicator(floorNum)
 		}
 	case "Door open move":
-		if e.floor != -1 {
+		if elevio.GetFloor() != -1 {
 			elevio.SetMotorDirection(elevio.MD_Stop)
 			e.state = ST_Idle
 		} else {
+			elevio.SetMotorDirection(elevio.MD_Down)
 			for elevio.GetFloor() == -1 {
 				time.Sleep(20 * time.Millisecond)
 			}
 			e.openAndCloseDoor()
 		}
 	case "Door obstruction moving", "Door obstruction idle":
-		if e.floor != -1 {
+		if elevio.GetFloor() != -1 {
 			elevio.SetMotorDirection(elevio.MD_Stop)
 			e.state = ST_DoorOpen
 		} else {
+			elevio.SetMotorDirection(elevio.MD_Down)
 			for elevio.GetFloor() == -1 {
 				time.Sleep(20 * time.Millisecond)
 			}
 			elevio.SetMotorDirection(elevio.MD_Stop)
+			e.doorObstructed = true
 			e.state = ST_DoorOpen
 		}
 	}

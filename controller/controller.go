@@ -29,6 +29,8 @@ func StartControlLoop(id int, driverAddr string, numFloors int) {
 	go elevio.PollObstructionSwitch(drv_obstr)
 	go elevio.PollStopButton(drv_stop)
 	go asg.ReceiveAssignments(asg_buttons, id)
+	go elevator.handleErrors(error_chan)
+
 
 	for {
 		select {
@@ -40,10 +42,10 @@ func StartControlLoop(id int, driverAddr string, numFloors int) {
 			elevator.addRequest(a)
 
 		case a := <-drv_floors:
-			elevator.handleFloorChange(a)
+			elevator.handleFloorChange(a, error_chan)
 
 		case a := <-drv_obstr:
-			elevator.handleDoorObstruction(a)
+			elevator.handleDoorObstruction(a, error_chan)
 
 		case a := <-drv_stop:
 			elevator.handleStopButton(a)
@@ -142,7 +144,6 @@ func (e *elevator) handleDoorObstruction(isObstructed bool, errorChan chan strin
 	switch e.state {
 	case ST_DoorOpen:
 		e.doorObstructed = isObstructed
-
 	case ST_Moving:
 		errorChan <- "Door obstruction moving"
 	case ST_Idle:
@@ -258,5 +259,42 @@ func (e *elevator) setCabButtonLights() {
 	// cab calls get set here, hall calls get set in statesync
 	for f := 0; f < len(e.requests); f++ {
 		elevio.SetButtonLamp(elevio.BT_Cab, f, e.requests[f][elevio.BT_Cab])
+	}
+}
+
+func (e *elevator) handleErrors(errorChan chan string) {
+	err := <-errorChan
+	switch err {
+	case "Unexpected move":
+		if e.floor != -1 {
+			elevio.SetMotorDirection(elevio.MD_Stop)
+			e.state = ST_Idle
+		} else {
+			for elevio.GetFloor() == -1 {
+				time.Sleep(20 * time.Millisecond)
+			}
+			elevio.SetMotorDirection(elevio.MD_Stop)
+		}
+	case "Door open move":
+		if e.floor != -1 {
+			elevio.SetMotorDirection(elevio.MD_Stop)
+			e.state = ST_Idle
+		} else {
+			for elevio.GetFloor() == -1 {
+				time.Sleep(20 * time.Millisecond)
+			}
+			e.openAndCloseDoor()
+		}
+	case "Door obstruction moving", "Door obstruction idle":
+		if e.floor != -1 {
+			elevio.SetMotorDirection(elevio.MD_Stop)
+			e.state = ST_DoorOpen
+		} else {
+			for elevio.GetFloor() == -1 {
+				time.Sleep(20 * time.Millisecond)
+			}
+			elevio.SetMotorDirection(elevio.MD_Stop)
+			e.state = ST_DoorOpen
+		}
 	}
 }

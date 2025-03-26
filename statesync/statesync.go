@@ -22,6 +22,15 @@ var thisElevatorID int
 func StartStatesync(elevator types.ElevatorState, reassignmentChan chan elevio.ButtonEvent, errorChan chan string) {
 	thisElevatorID = elevator.GetID()
 
+	go func() { //Check every second
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			ElevatorStuck(elevator, errorChan)
+		}
+	}()
+
 	go broadcastState(elevator)
 	go receiveStates()
 	go monitorFailedSyncs(reassignmentChan)
@@ -121,25 +130,46 @@ func monitorFailedSyncs(reassignmentChan chan elevio.ButtonEvent) {
 				continue
 			}
 			if time.Since(s.lastSync) > syncTimeout {
-				log.Printf("Elevator %d has not synced for over %v. Reassigning orders.", id, syncTimeout)
-
-				for floor, order := range s.request {
-					for btn, active := range order {
-						if active {
-
-							reassignmentChan <- elevio.ButtonEvent{
-								Floor:  floor,
-								Button: elevio.ButtonType(btn),
-							}
-
-							s.request[floor][btn] = false
-						}
-					}
-				}
-				states[id] = nil
+				handleFailedSync(id, s, reassignmentChan)
 			}
 		}
 		mtx.RUnlock()
+	}
+}
+
+/**
+ * @brief Handles a failed sync by reassigning orders and clearing the elevator's state.
+ *
+ * @param id The ID of the elevator that failed to sync.
+ * @param s The state of the elevator that failed to sync.
+ * @param reassignmentChan The channel to send reassigned orders to.
+ */
+func handleFailedSync(id int, s *elevatorState, reassignmentChan chan elevio.ButtonEvent) {
+	log.Printf("Elevator %d has not synced for over %v. Reassigning orders.", id, syncTimeout)
+
+	reassignOrders(s, reassignmentChan)
+	mtx.Lock()
+	states[id] = nil
+	mtx.Unlock()
+}
+
+/**
+ * @brief Reassigns all active orders from a failed elevator to the reassignment channel.
+ *
+ * @param s The state of the elevator that failed to sync.
+ * @param reassignmentChan The channel to send reassigned orders to.
+ */
+func reassignOrders(s *elevatorState, reassignmentChan chan elevio.ButtonEvent) {
+	for floor, order := range s.request {
+		for btn, active := range order {
+			if active {
+				reassignmentChan <- elevio.ButtonEvent{
+					Floor:  floor,
+					Button: elevio.ButtonType(btn),
+				}
+				s.request[floor][btn] = false
+			}
+		}
 	}
 }
 
@@ -304,9 +334,9 @@ func orAggregateAllLiveRequests() [][2]bool {
 /**
  * @brief Detects if an elevator is stuck and sets its online flag accordingly.
  */
-func (e *elevatorState) ElevatorStuck(errorChan chan string) {
-	e.timeSinceLastAction()
-	currDirection := e.GetDirection()
+func ElevatorStuck(elevator types.ElevatorState, errorChan chan string) {
+	timeSinceLastAction(elevator)
+	currDirection := elevator.GetDirection()
 	if time.Since(lastActionTime) > 5 && currDirection != 0 {
 		errorChan <- "Elevator stuck"
 	}
@@ -320,10 +350,10 @@ var prevDirection elevio.MotorDirection
 /**
  * @brief Updates the lastActionTime of an elevator if it changes direction or floor.
  */
-func (e *elevatorState) timeSinceLastAction() {
-	if e.currFloor != prevFloor || e.currDirection != prevDirection {
+func timeSinceLastAction(elevator types.ElevatorState) {
+	if elevator.GetFloor() != prevFloor || elevator.GetDirection() != prevDirection {
 		lastActionTime = time.Now()
-		prevFloor = e.currFloor
-		prevDirection = e.currDirection
+		prevFloor = elevator.GetFloor()
+		prevDirection = elevator.GetDirection()
 	}
 }

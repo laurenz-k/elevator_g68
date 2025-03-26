@@ -165,6 +165,7 @@ func reassignOrders(s *elevatorState, reassignmentChan chan elevio.ButtonEvent) 
 					Floor:  floor,
 					Button: elevio.ButtonType(btn),
 				}
+				log.Printf("Reassigning order from elevator %d: %d %d", s.id, floor, btn)
 				s.request[floor][btn] = false
 			}
 		}

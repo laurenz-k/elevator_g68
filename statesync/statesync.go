@@ -347,7 +347,7 @@ func ElevatorStuck(elevator types.ElevatorState, errorChan chan string) {
 			break
 		}
 	}
-	if (!hasActiveCalls) && (time.Since(lastActionTime) > 5*time.Second) {
+	if (hasActiveCalls) && (time.Since(lastActionTime) > 5*time.Second) {
 		log.Printf("Elevator stuck with no active calls and last action time %v", time.Since(lastActionTime))
 		errorChan <- "Elevator stuck"
 	}

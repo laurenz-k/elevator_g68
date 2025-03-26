@@ -37,7 +37,7 @@ func StartControlLoop(id int, driverAddr string, numFloors int) {
 
 		case a := <-asg_buttons:
 			// TODO log only on first assignment received
-			log.Printf("Reveived assignment: %+v\n", a)
+			log.Printf("Received assignment: %+v\n", a)
 			elevator.addRequest(a)
 
 		case a := <-drv_floors:
@@ -272,21 +272,22 @@ func (e *elevator) setCabButtonLights() {
 
 func (e *elevator) handleErrors(errorChan chan string) {
 	myID := e.id
-	err := <-errorChan
-	switch err {
-	case "Unexpected move", "Door open move":
-		sts.TurnOffElevator(myID)
-		if elevio.GetFloor() != -1 {
-			elevio.SetMotorDirection(elevio.MD_Stop)
-			e.state = ST_Idle
-			sts.TurnOnElevator(myID)
-		} else {
-			elevio.SetMotorDirection(elevio.MD_Down)
-			for elevio.GetFloor() == -1 {
-				time.Sleep(20 * time.Millisecond)
-			}
-			e.openAndCloseDoor()
-			sts.TurnOnElevator(myID)
+	for {
+		err := <-errorChan
+		switch err {
+		case "Unexpected move", "Door open move":
+			sts.TurnOffElevator(myID)
+			if elevio.GetFloor() != -1 {
+				elevio.SetMotorDirection(elevio.MD_Stop)
+				e.state = ST_Idle
+				sts.TurnOnElevator(myID)
+			} else {
+				elevio.SetMotorDirection(elevio.MD_Down)
+				for elevio.GetFloor() == -1 {
+					time.Sleep(20 * time.Millisecond)
+				}
+				e.openAndCloseDoor()
+				sts.TurnOnElevator(myID)
 
 		}
 	

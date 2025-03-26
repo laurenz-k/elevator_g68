@@ -149,12 +149,12 @@ func (e *elevator) handleDoorObstruction(isObstructed bool, errorChan chan strin
 		e.doorObstructed = isObstructed
 	case ST_Moving:
 		errorChan <- "Door obstruction moving"
-		e.doorObstructed = isObstructed
 		log.Printf("Stuck in Door obstruction error moving")
+		e.doorObstructed = isObstructed
 	case ST_Idle:
 		errorChan <- "Door obstruction idle"
-		e.doorObstructed = isObstructed
 		log.Printf("Stuck in Door obstruction error idle")
+		e.doorObstructed = isObstructed
 	}
 }
 
@@ -307,6 +307,11 @@ func (e *elevator) handleErrors(errorChan chan string) {
 			sts.TurnOnElevator(myID)
 		case "Door obstruction idle":
 			e.openAndCloseDoor()
+		case "Elevator stuck":
+			sts.TurnOffElevator(myID)
+			for elevio.GetFloor() != -1 {
+				sts.TurnOnElevator(myID)
+			}
 		}
 	}
 }

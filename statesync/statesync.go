@@ -124,7 +124,6 @@ func monitorFailedSyncs(reassignmentChan chan elevio.ButtonEvent) {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		mtx.RLock()
 		for id, s := range states {
 			if s == nil {
 				continue
@@ -133,7 +132,6 @@ func monitorFailedSyncs(reassignmentChan chan elevio.ButtonEvent) {
 				handleFailedSync(id, s, reassignmentChan)
 			}
 		}
-		mtx.RUnlock()
 	}
 }
 
@@ -336,8 +334,21 @@ func orAggregateAllLiveRequests() [][2]bool {
  */
 func ElevatorStuck(elevator types.ElevatorState, errorChan chan string) {
 	timeSinceLastAction(elevator)
-	currDirection := elevator.GetDirection()
-	if time.Since(lastActionTime) > 5 && currDirection != 0 {
+	hasActiveCalls := false
+	requests := elevator.GetRequests()
+	for _, floorRequests := range requests {
+		for _, active := range floorRequests {
+			if active {
+				hasActiveCalls = true
+				break
+			}
+		}
+		if hasActiveCalls {
+			break
+		}
+	}
+	if (hasActiveCalls) && (time.Since(lastActionTime) > 5*time.Second) {
+		log.Printf("Elevator stuck with no active calls and last action time %v", time.Since(lastActionTime))
 		errorChan <- "Elevator stuck"
 	}
 }

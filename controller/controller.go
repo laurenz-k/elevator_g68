@@ -224,6 +224,8 @@ func (e *elevator) clearFloorRequests(d elevio.MotorDirection) {
 	// cab requests
 	e.requests[e.floor][elevio.BT_Cab] = false
 
+	flushRequests(e.requests)
+
 	// same direction calls
 	if d == elevio.MD_Up {
 		e.requests[e.floor][elevio.BT_HallUp] = false

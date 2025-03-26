@@ -124,7 +124,7 @@ func monitorFailedSyncs(reassignmentChan chan elevio.ButtonEvent) {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		mtx.RLock()
+		//mtx.RLock()
 		for id, s := range states {
 			if s == nil {
 				continue
@@ -133,7 +133,7 @@ func monitorFailedSyncs(reassignmentChan chan elevio.ButtonEvent) {
 				handleFailedSync(id, s, reassignmentChan)
 			}
 		}
-		mtx.RUnlock()
+		//mtx.RUnlock()
 	}
 }
 

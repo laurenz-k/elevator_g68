@@ -283,6 +283,8 @@ func (e *elevator) handleErrors(errorChan chan string) {
 		case "Unexpected move", "Door open move":
 			sts.TurnOffElevator(myID)
 			if elevio.GetFloor() != -1 {
+				e.floor = elevio.GetFloor()
+				elevio.SetFloorIndicator(e.floor)
 				elevio.SetMotorDirection(elevio.MD_Stop)
 				e.state = ST_Idle
 				sts.TurnOnElevator(myID)

@@ -263,7 +263,7 @@ func (e *elevator) handleErrors(errorChan chan string) {
 	err := <-errorChan
 	switch err {
 	case "Unexpected move":
-		if e.floor != -1 {
+		if elevio.GetFloor() != -1 {
 			elevio.SetMotorDirection(elevio.MD_Stop)
 			e.state = ST_Idle
 		} else {
@@ -276,7 +276,7 @@ func (e *elevator) handleErrors(errorChan chan string) {
 			elevio.SetFloorIndicator(floorNum)
 		}
 	case "Door open move":
-		if e.floor != -1 {
+		if elevio.GetFloor() != -1 {
 			elevio.SetMotorDirection(elevio.MD_Stop)
 			e.state = ST_Idle
 		} else {
@@ -286,7 +286,7 @@ func (e *elevator) handleErrors(errorChan chan string) {
 			e.openAndCloseDoor()
 		}
 	case "Door obstruction moving", "Door obstruction idle":
-		if e.floor != -1 {
+		if elevio.GetFloor() != -1 {
 			elevio.SetMotorDirection(elevio.MD_Stop)
 			e.state = ST_DoorOpen
 		} else {

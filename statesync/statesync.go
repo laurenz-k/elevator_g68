@@ -22,6 +22,15 @@ var thisElevatorID int
 func StartStatesync(elevator types.ElevatorState, reassignmentChan chan elevio.ButtonEvent, errorChan chan string) {
 	thisElevatorID = elevator.GetID()
 
+	go func() { //Check every second
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			ElevatorStuck(elevator, errorChan)
+		}
+	}()
+
 	go broadcastState(elevator)
 	go receiveStates()
 	go monitorFailedSyncs(reassignmentChan)
@@ -304,9 +313,9 @@ func orAggregateAllLiveRequests() [][2]bool {
 /**
  * @brief Detects if an elevator is stuck and sets its online flag accordingly.
  */
-func (e *elevatorState) ElevatorStuck(errorChan chan string) {
-	e.timeSinceLastAction()
-	currDirection := e.GetDirection()
+func ElevatorStuck(elevator types.ElevatorState, errorChan chan string) {
+	timeSinceLastAction(elevator)
+	currDirection := elevator.GetDirection()
 	if time.Since(lastActionTime) > 5 && currDirection != 0 {
 		errorChan <- "Elevator stuck"
 	}
@@ -320,10 +329,10 @@ var prevDirection elevio.MotorDirection
 /**
  * @brief Updates the lastActionTime of an elevator if it changes direction or floor.
  */
-func (e *elevatorState) timeSinceLastAction() {
-	if e.currFloor != prevFloor || e.currDirection != prevDirection {
+func timeSinceLastAction(elevator types.ElevatorState) {
+	if elevator.GetFloor() != prevFloor || elevator.GetDirection() != prevDirection {
 		lastActionTime = time.Now()
-		prevFloor = e.currFloor
-		prevDirection = e.currDirection
+		prevFloor = elevator.GetFloor()
+		prevDirection = elevator.GetDirection()
 	}
 }

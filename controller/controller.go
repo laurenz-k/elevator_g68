@@ -36,6 +36,7 @@ func StartControlLoop(id int, driverAddr string, numFloors int) {
 			elevator.handleButtonPress(a)
 
 		case a := <-asg_buttons:
+			// TODO log only on first assignment received
 			log.Printf("Reveived assignment: %+v\n", a)
 			elevator.addRequest(a)
 
@@ -72,6 +73,10 @@ func setup(id int, driverAddr string, numFloors int) *elevator {
 		requests:       restoreRequests(numFloors),
 		doorObstructed: false,
 	}
+
+	// dispatch test
+	elevator.setNextDirection(elevio.MD_Stop)
+
 	elevator.setCabButtonLights()
 	return elevator
 }
@@ -243,6 +248,7 @@ func (e *elevator) clearFloorRequests(d elevio.MotorDirection) {
 	}
 }
 
+// TODO make a pure function?
 func (e *elevator) setNextDirection(d elevio.MotorDirection) {
 	// keeps same direction as long as there's requests in same direction left
 	if d == elevio.MD_Up && e.hasRequestAbove() {

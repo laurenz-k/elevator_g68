@@ -167,32 +167,3 @@ func ReceiveAssignments(assignmentChan chan elevio.ButtonEvent, thisElevatorID i
 		}
 	}
 }
-
-/**
- * @brief Reassigns all tasks assigned to a disconnected elevator to the best available elevator.
- * @param disconnectedID The ID of the disconnected elevator.
- */
-func ReassignTasksForDisconnectedElevator(disconnectedID int) {
-	// TODO:
-	// 1. Retrieve all tasks currently assigned to 'disconnectedID'.
-	// 2. Mark them as unassigned or move them into a queue of unassigned tasks.
-	// 3. Re-run the assignment logic (cost function) for each of those tasks.
-	// 4. Assign them to the best available elevator.
-	disconnectedState := statesync.GetState(disconnectedID)
-	for floor, order := range disconnectedState.GetRequests() { //Goes through each floor,
-		if order[elevio.BT_HallUp] { //looks for hall calls assigned to the dead elevator,
-			event := elevio.ButtonEvent{ //assigns them to a new one.
-				Floor:  floor,
-				Button: elevio.ButtonType(elevio.BT_HallUp),
-			}
-			Assign(event)
-		}
-		if order[elevio.BT_HallDown] {
-			event := elevio.ButtonEvent{
-				Floor:  floor,
-				Button: elevio.ButtonType(elevio.BT_HallDown),
-			}
-			Assign(event)
-		}
-	}
-}

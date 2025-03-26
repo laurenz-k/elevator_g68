@@ -15,8 +15,6 @@ const broadcastPort = "15001"
 const interval = 100 * time.Millisecond
 const syncTimeout = 1 * time.Second
 
-
-
 var mtx sync.RWMutex
 var states = make([]*elevatorState, 0, 10)
 var thisElevatorID int
@@ -302,35 +300,15 @@ func orAggregateAllLiveRequests() [][2]bool {
 	return aggMatrix
 }
 
-/**
- * @brief Helps with improving error checking for receiving and processing state messages over UDP.
- *
- * TODO:
- * 1. In the ReceiveStates loop, check for errors on conn.Read.
- * 2. If an error occurs, log it and possibly break the loop or retry.
- * 3. Validate the length of the received data before attempting deserialization.
- */
-func HandleStateReception() {
-	// TODO:
-	// 1. In the ReceiveStates loop, check for errors on conn.Read.
-	// 2. If an error occurs, log it and possibly break the loop or retry.
-	// 3. Validate the length of the received data before attempting deserialization.
-
-}
-
 // fits better with controller??
 /**
  * @brief Detects if an elevator is stuck and sets its online flag accordingly.
  */
-func (e *elevatorState) ElevatorStuck() {
+func (e *elevatorState) ElevatorStuck(errorChan chan string) {
 	e.timeSinceLastAction()
 	currDirection := e.GetDirection()
-	if currDirection == 0 {
-		TurnOnElevator(e.GetID())
-	} else if time.Since(lastActionTime) < 5 {
-		TurnOnElevator(e.GetID())
-	} else {
-		TurnOffElevator(e.GetID())
+	if time.Since(lastActionTime) > 5 && currDirection != 0 {
+		errorChan <- "Elevator stuck"
 	}
 }
 

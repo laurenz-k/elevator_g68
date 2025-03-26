@@ -10,16 +10,14 @@ import (
 )
 
 func StartControlLoop(id int, driverAddr string, numFloors int) {
-
-	elevator := setup(id, driverAddr, numFloors)
-
 	drv_buttons := make(chan elevio.ButtonEvent)
 	drv_floors := make(chan int)
 	drv_obstr := make(chan bool)
 	drv_stop := make(chan bool)
 	asg_buttons := make(chan elevio.ButtonEvent)
-
 	error_chan := make(chan string)
+
+	elevator := setup(id, driverAddr, numFloors)
 
 	sts.StartStatesync(elevator, drv_buttons, error_chan)
 
@@ -97,36 +95,6 @@ func (e *elevator) handleAssignment(b elevio.ButtonEvent) {
 	e.addRequest(b)
 }
 
-func (e *elevator) addRequest(b elevio.ButtonEvent) {
-	e.requests[b.Floor][b.Button] = true
-	flushRequests(e.requests)
-
-	// TODO test reassignment => do we need to blast here or is regular heartbeat enough?
-
-	switch e.state {
-	case ST_Idle:
-		if e.floor < b.Floor {
-			e.state = ST_Moving
-			e.direction = elevio.MD_Up
-			elevio.SetMotorDirection(e.direction)
-		} else if e.floor > b.Floor {
-			e.state = ST_Moving
-			e.direction = elevio.MD_Down
-			elevio.SetMotorDirection(e.direction)
-		} else {
-			e.openAndCloseDoor()
-		}
-	case ST_Moving:
-		break
-	case ST_DoorOpen:
-		e.requests[e.floor][elevio.BT_Cab] = false
-		e.requests[e.floor][elevio.BT_HallUp] = false
-		e.requests[e.floor][elevio.BT_HallDown] = false
-	}
-
-	e.setCabButtonLights()
-}
-
 func (e *elevator) handleFloorChange(floorNum int, errorChan chan string) {
 	log.Printf("floor changed %+v\n", floorNum)
 
@@ -166,6 +134,36 @@ func (e *elevator) handleDoorObstruction(isObstructed bool, errorChan chan strin
 }
 
 func (e *elevator) handleStopButton(isPressed bool) {
+}
+
+func (e *elevator) addRequest(b elevio.ButtonEvent) {
+	e.requests[b.Floor][b.Button] = true
+	flushRequests(e.requests)
+
+	// TODO test reassignment => do we need to blast here or is regular heartbeat enough?
+
+	switch e.state {
+	case ST_Idle:
+		if e.floor < b.Floor {
+			e.state = ST_Moving
+			e.direction = elevio.MD_Up
+			elevio.SetMotorDirection(e.direction)
+		} else if e.floor > b.Floor {
+			e.state = ST_Moving
+			e.direction = elevio.MD_Down
+			elevio.SetMotorDirection(e.direction)
+		} else {
+			e.openAndCloseDoor()
+		}
+	case ST_Moving:
+		break
+	case ST_DoorOpen:
+		e.requests[e.floor][elevio.BT_Cab] = false
+		e.requests[e.floor][elevio.BT_HallUp] = false
+		e.requests[e.floor][elevio.BT_HallDown] = false
+	}
+
+	e.setCabButtonLights()
 }
 
 func (e *elevator) openAndCloseDoor() {

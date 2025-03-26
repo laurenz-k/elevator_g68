@@ -12,7 +12,7 @@ import (
 
 const broadcastAddr = "255.255.255.255"
 const broadcastPort = "15001"
-const interval = 100 * time.Millisecond
+const interval = 25 * time.Millisecond
 const syncTimeout = 1 * time.Second
 
 var mtx sync.RWMutex
@@ -111,7 +111,7 @@ func receiveStates() {
  * @brief Monitors elevator states and reassigns orders if an elevator is out of sync.
  */
 func monitorFailedSyncs(reassignmentChan chan elevio.ButtonEvent) {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(syncTimeout)
 	defer ticker.Stop()
 
 	for range ticker.C {

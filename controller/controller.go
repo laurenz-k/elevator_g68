@@ -74,6 +74,7 @@ func setup(id int, driverAddr string, numFloors int) *elevator {
 
 	// dispatch test
 	elevator.setNextDirection(elevio.MD_Stop)
+	elevio.SetMotorDirection(elevator.direction)
 
 	elevator.setCabButtonLights()
 	return elevator
@@ -229,6 +230,8 @@ func (e *elevator) hasRequestBelow() bool {
 func (e *elevator) clearFloorRequests(d elevio.MotorDirection) {
 	// cab requests
 	e.requests[e.floor][elevio.BT_Cab] = false
+
+	flushRequests(e.requests)
 
 	// same direction calls
 	if d == elevio.MD_Up {

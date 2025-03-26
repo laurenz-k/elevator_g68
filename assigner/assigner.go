@@ -90,6 +90,8 @@ func Assign(request elevio.ButtonEvent) {
 	addr := broadcastAddr + ":" + broadcastPort
 	conn, _ := net.Dial("udp", addr)
 
+	// TODO unpluging ethernet causes segfault => debug tomorrow
+
 	defer conn.Close()
 
 	assignment := Assignment{

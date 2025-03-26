@@ -303,6 +303,7 @@ func (e *elevator) handleErrors(errorChan chan string) {
 		case "Door obstruction idle":
 			e.openAndCloseDoor()
 		case "Elevator stuck":
+			log.Printf("Elevator stuck")
 			sts.TurnOffElevator(myID)
 			for elevio.GetFloor() != -1 {
 				sts.TurnOnElevator(myID)

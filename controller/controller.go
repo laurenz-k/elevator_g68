@@ -70,11 +70,10 @@ func setup(id int, driverAddr string, numFloors int) *elevator {
 		doorObstructed: false,
 	}
 
-	// dispatch test
 	elevator.setNextDirection(elevio.MD_Stop)
 	elevio.SetMotorDirection(elevator.direction)
 
-	elevator.setCabButtonLights()
+	setCabButtonLights(elevator.requests)
 	return elevator
 }
 
@@ -91,8 +90,8 @@ func (e *elevator) handleButtonPress(b elevio.ButtonEvent) {
 func (e *elevator) handleAssignment(b elevio.ButtonEvent) {
 	if !e.requests[b.Floor][b.Button] {
 		log.Printf("Received assignment: %+v\n", b)
+		e.addRequest(b)
 	}
-	e.addRequest(b)
 }
 
 func (e *elevator) handleFloorChange(floorNum int, errorChan chan string) {
@@ -163,7 +162,7 @@ func (e *elevator) addRequest(b elevio.ButtonEvent) {
 		e.requests[e.floor][elevio.BT_HallDown] = false
 	}
 
-	e.setCabButtonLights()
+	setCabButtonLights(e.requests)
 }
 
 func (e *elevator) openAndCloseDoor() {
@@ -176,7 +175,7 @@ func (e *elevator) openAndCloseDoor() {
 
 	e.clearFloorRequests(prevDirection)
 
-	e.setCabButtonLights()
+	setCabButtonLights(e.requests)
 
 	time.AfterFunc(3*time.Second, func() {
 		for e.doorObstructed {
@@ -194,19 +193,19 @@ func (e *elevator) stopOnCurrentFloor() bool {
 	if e.direction == elevio.MD_Up {
 		return (e.requests[e.floor][elevio.BT_Cab] ||
 			e.requests[e.floor][elevio.BT_HallUp] ||
-			!e.hasRequestAbove())
+			!hasRequestAbove(e.floor, e.requests))
 	} else if e.direction == elevio.MD_Down {
 		return (e.requests[e.floor][elevio.BT_Cab] ||
 			e.requests[e.floor][elevio.BT_HallDown] ||
-			!e.hasRequestBelow())
+			!hasRequestBelow(e.floor, e.requests))
 	}
 	return false
 }
 
-func (e *elevator) hasRequestAbove() bool {
-	for f := e.floor + 1; f < len(e.requests); f++ {
-		for btn := 0; btn < len(e.requests[f]); btn++ {
-			if e.requests[f][btn] {
+func hasRequestAbove(currFloor int, requests [][3]bool) bool {
+	for f := currFloor + 1; f < len(requests); f++ {
+		for btn := 0; btn < len(requests[f]); btn++ {
+			if requests[f][btn] {
 				return true
 			}
 		}
@@ -214,10 +213,10 @@ func (e *elevator) hasRequestAbove() bool {
 	return false
 }
 
-func (e *elevator) hasRequestBelow() bool {
-	for f := 0; f < e.floor; f++ {
-		for btn := 0; btn < len(e.requests[f]); btn++ {
-			if e.requests[f][btn] {
+func hasRequestBelow(currFloor int, requests [][3]bool) bool {
+	for f := 0; f < currFloor; f++ {
+		for btn := 0; btn < len(requests[f]); btn++ {
+			if requests[f][btn] {
 				return true
 			}
 		}
@@ -242,9 +241,9 @@ func (e *elevator) clearFloorRequests(d elevio.MotorDirection) {
 	}
 
 	// opposite direction calls iff there's no more unfilled requests in direction
-	if d == elevio.MD_Up && !e.hasRequestAbove() {
+	if d == elevio.MD_Up && !hasRequestAbove(e.floor, e.requests) {
 		e.requests[e.floor][elevio.BT_HallDown] = false
-	} else if d == elevio.MD_Down && !e.hasRequestBelow() {
+	} else if d == elevio.MD_Down && !hasRequestBelow(e.floor, e.requests) {
 		e.requests[e.floor][elevio.BT_HallUp] = false
 	}
 }
@@ -252,16 +251,16 @@ func (e *elevator) clearFloorRequests(d elevio.MotorDirection) {
 // TODO make a pure function?
 func (e *elevator) setNextDirection(d elevio.MotorDirection) {
 	// keeps same direction as long as there's requests in same direction left
-	if d == elevio.MD_Up && e.hasRequestAbove() {
+	if d == elevio.MD_Up && hasRequestAbove(e.floor, e.requests) {
 		e.state = ST_Moving
 		e.direction = elevio.MD_Up
-	} else if d == elevio.MD_Down && e.hasRequestBelow() {
+	} else if d == elevio.MD_Down && hasRequestBelow(e.floor, e.requests) {
 		e.state = ST_Moving
 		e.direction = elevio.MD_Down
-	} else if e.hasRequestAbove() {
+	} else if hasRequestAbove(e.floor, e.requests) {
 		e.state = ST_Moving
 		e.direction = elevio.MD_Up
-	} else if e.hasRequestBelow() {
+	} else if hasRequestBelow(e.floor, e.requests) {
 		e.state = ST_Moving
 		e.direction = elevio.MD_Down
 	} else {
@@ -270,10 +269,9 @@ func (e *elevator) setNextDirection(d elevio.MotorDirection) {
 	}
 }
 
-func (e *elevator) setCabButtonLights() {
-	// cab calls get set here, hall calls get set in statesync
-	for f := 0; f < len(e.requests); f++ {
-		elevio.SetButtonLamp(elevio.BT_Cab, f, e.requests[f][elevio.BT_Cab])
+func setCabButtonLights(requests [][3]bool) {
+	for f := 0; f < len(requests); f++ {
+		elevio.SetButtonLamp(elevio.BT_Cab, f, requests[f][elevio.BT_Cab])
 	}
 }
 

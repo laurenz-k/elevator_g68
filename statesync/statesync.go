@@ -12,10 +12,8 @@ import (
 
 const broadcastAddr = "255.255.255.255"
 const broadcastPort = "15001"
-const interval = 100 * time.Millisecond
+const interval = 25 * time.Millisecond
 const syncTimeout = 1 * time.Second
-
-
 
 var mtx sync.RWMutex
 var states = make([]*elevatorState, 0, 10)
@@ -23,6 +21,15 @@ var thisElevatorID int
 
 func StartStatesync(elevator types.ElevatorState, reassignmentChan chan elevio.ButtonEvent, errorChan chan string) {
 	thisElevatorID = elevator.GetID()
+
+	go func() { //Check every second
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			ElevatorStuck(elevator, errorChan)
+		}
+	}()
 
 	go broadcastState(elevator)
 	go receiveStates()
@@ -113,7 +120,7 @@ func receiveStates() {
  * @brief Monitors elevator states and reassigns orders if an elevator is out of sync.
  */
 func monitorFailedSyncs(reassignmentChan chan elevio.ButtonEvent) {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(syncTimeout)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -302,35 +309,15 @@ func orAggregateAllLiveRequests() [][2]bool {
 	return aggMatrix
 }
 
-/**
- * @brief Helps with improving error checking for receiving and processing state messages over UDP.
- *
- * TODO:
- * 1. In the ReceiveStates loop, check for errors on conn.Read.
- * 2. If an error occurs, log it and possibly break the loop or retry.
- * 3. Validate the length of the received data before attempting deserialization.
- */
-func HandleStateReception() {
-	// TODO:
-	// 1. In the ReceiveStates loop, check for errors on conn.Read.
-	// 2. If an error occurs, log it and possibly break the loop or retry.
-	// 3. Validate the length of the received data before attempting deserialization.
-
-}
-
 // fits better with controller??
 /**
  * @brief Detects if an elevator is stuck and sets its online flag accordingly.
  */
-func (e *elevatorState) ElevatorStuck() {
-	e.timeSinceLastAction()
-	currDirection := e.GetDirection()
-	if currDirection == 0 {
-		TurnOnElevator(e.GetID())
-	} else if time.Since(lastActionTime) < 5 {
-		TurnOnElevator(e.GetID())
-	} else {
-		TurnOffElevator(e.GetID())
+func ElevatorStuck(elevator types.ElevatorState, errorChan chan string) {
+	timeSinceLastAction(elevator)
+	currDirection := elevator.GetDirection()
+	if time.Since(lastActionTime) > 5 && currDirection != 0 {
+		errorChan <- "Elevator stuck"
 	}
 }
 
@@ -342,10 +329,10 @@ var prevDirection elevio.MotorDirection
 /**
  * @brief Updates the lastActionTime of an elevator if it changes direction or floor.
  */
-func (e *elevatorState) timeSinceLastAction() {
-	if e.currFloor != prevFloor || e.currDirection != prevDirection {
+func timeSinceLastAction(elevator types.ElevatorState) {
+	if elevator.GetFloor() != prevFloor || elevator.GetDirection() != prevDirection {
 		lastActionTime = time.Now()
-		prevFloor = e.currFloor
-		prevDirection = e.currDirection
+		prevFloor = elevator.GetFloor()
+		prevDirection = elevator.GetDirection()
 	}
 }

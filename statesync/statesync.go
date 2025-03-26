@@ -130,25 +130,46 @@ func monitorFailedSyncs(reassignmentChan chan elevio.ButtonEvent) {
 				continue
 			}
 			if time.Since(s.lastSync) > syncTimeout {
-				log.Printf("Elevator %d has not synced for over %v. Reassigning orders.", id, syncTimeout)
-
-				for floor, order := range s.request {
-					for btn, active := range order {
-						if active {
-
-							reassignmentChan <- elevio.ButtonEvent{
-								Floor:  floor,
-								Button: elevio.ButtonType(btn),
-							}
-
-							s.request[floor][btn] = false
-						}
-					}
-				}
-				states[id] = nil
+				handleFailedSync(id, s, reassignmentChan)
 			}
 		}
 		mtx.RUnlock()
+	}
+}
+
+/**
+ * @brief Handles a failed sync by reassigning orders and clearing the elevator's state.
+ *
+ * @param id The ID of the elevator that failed to sync.
+ * @param s The state of the elevator that failed to sync.
+ * @param reassignmentChan The channel to send reassigned orders to.
+ */
+func handleFailedSync(id int, s *elevatorState, reassignmentChan chan elevio.ButtonEvent) {
+	log.Printf("Elevator %d has not synced for over %v. Reassigning orders.", id, syncTimeout)
+
+	reassignOrders(s, reassignmentChan)
+	mtx.Lock()
+	states[id] = nil
+	mtx.Unlock()
+}
+
+/**
+ * @brief Reassigns all active orders from a failed elevator to the reassignment channel.
+ *
+ * @param s The state of the elevator that failed to sync.
+ * @param reassignmentChan The channel to send reassigned orders to.
+ */
+func reassignOrders(s *elevatorState, reassignmentChan chan elevio.ButtonEvent) {
+	for floor, order := range s.request {
+		for btn, active := range order {
+			if active {
+				reassignmentChan <- elevio.ButtonEvent{
+					Floor:  floor,
+					Button: elevio.ButtonType(btn),
+				}
+				s.request[floor][btn] = false
+			}
+		}
 	}
 }
 

@@ -3,6 +3,7 @@ package assigner
 import (
 	"elevator/elevio"
 	"elevator/statesync"
+	"log"
 	"net"
 )
 
@@ -76,6 +77,7 @@ func cost(call elevio.ButtonEvent, aliveElevators []int) int {
 func Assign(request elevio.ButtonEvent) {
 	//Check if the call is already assigned to an elevator
 	if alreadyAssigned(request) {
+		log.Printf("Call already assigned")
 		return
 	}
 	//Obtain states of alive elevators, calculate their costs. Lowest cost wins. In a draw, lowest/highest ID wins.
@@ -83,6 +85,7 @@ func Assign(request elevio.ButtonEvent) {
 	//Go through the costs of all elevators in loop with. Lowest wins.
 
 	winnerElevatorID := cost(request, aliveIDs)
+	log.Printf("Assigning call to elevator %d", winnerElevatorID)
 
 	addr := broadcastAddr + ":" + broadcastPort
 	conn, _ := net.Dial("udp", addr)

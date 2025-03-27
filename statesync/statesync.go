@@ -11,7 +11,7 @@ import (
 )
 
 const broadcastAddr = "255.255.255.255"
-const broadcastPort = "15001"
+const broadcastPort = "30068"
 const interval = 25 * time.Millisecond
 const syncTimeout = 3 * time.Second
 

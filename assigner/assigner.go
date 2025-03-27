@@ -46,7 +46,7 @@ type assignment struct {
 
 // ReceiveAssignments starts listening for assignments for this elevator
 // and forwards them to to assignment channel.
-func ReceiveAssignments(c chan elevio.ButtonEvent) {
+func ReceiveAssignments() {
 	addr, _ := net.ResolveUDPAddr("udp", broadcastAddr+":"+broadcastPort)
 	conn, _ := net.ListenUDP("udp", addr)
 
@@ -64,7 +64,7 @@ func ReceiveAssignments(c chan elevio.ButtonEvent) {
 		// deduplication
 		assignerNonce, exists := _elevatorNonces[assignment.assignerID]
 		if !exists || assignerNonce < assignment.nonce {
-			c <- assignment.button
+			_assignmentChan <- assignment.button
 			_elevatorNonces[assignment.assignerID] = assignment.nonce
 		}
 	}
@@ -99,26 +99,19 @@ func Assign(request elevio.ButtonEvent) int {
 	return assigneeID
 }
 
-// TODO investigate cost - must at least return one ID -> my ID
-/**
- * @brief Calculates the cost of assigning a call to every elevator still alive.
- *
- * @param call The call to be assigned.
- * @param aliveElevators The IDs of the alive elevators.
- * @return The ID of the elevator with the lowest cost.
- */
+// cost returns ID of best currently availible elevator.
+// Returns at least the ID of the initializing elevator.
 func cost(call elevio.ButtonEvent) int {
 	aliveElevators := statesync.GetAliveElevatorIDs()
-	// TODO we should't assign to an elevator that's currently obstructed
-	lowestcost := 1000
-	lowestcostID := 0
 
-	if len(aliveElevators) == 1 {
-		return aliveElevators[0]
-	}
+	lowestcost := 1000
+	lowestcostID := _elevatorID
 
 	for _, elevatorID := range aliveElevators {
 		state := statesync.GetState(elevatorID)
+		if state == nil {
+			continue
+		}
 		cost := 0
 		if state.GetFloor() < call.Floor { //Checks if we are below the floor of the call
 			cost += call.Floor - state.GetFloor()       //The difference in floors between the elevator and call is added to the cost

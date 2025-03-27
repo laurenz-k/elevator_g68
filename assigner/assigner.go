@@ -9,11 +9,6 @@ import (
 	"net"
 )
 
-// TODO
-// 	clearer separation of concerns
-// 	assign can assign directly to self without network
-// 	minimal interface
-
 const broadcastAddr = "255.255.255.255"
 const broadcastPort = "20068"
 const transmissionBatchSize = 10

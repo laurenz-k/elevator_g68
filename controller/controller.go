@@ -9,13 +9,19 @@ import (
 	sts "elevator/statesync"
 )
 
+var _elevatorID int
+
 func StartControlLoop(id int, driverAddr string, numFloors int) {
+	_elevatorID = id
+
 	drv_buttons := make(chan elevio.ButtonEvent)
 	drv_floors := make(chan int)
 	drv_obstr := make(chan bool)
 	drv_stop := make(chan bool)
 	asg_buttons := make(chan elevio.ButtonEvent)
 	error_chan := make(chan string)
+
+	asg.Init(id, asg_buttons)
 
 	elevator := setup(id, driverAddr, numFloors)
 
@@ -25,7 +31,7 @@ func StartControlLoop(id int, driverAddr string, numFloors int) {
 	go elevio.PollFloorSensor(drv_floors)
 	go elevio.PollObstructionSwitch(drv_obstr)
 	go elevio.PollStopButton(drv_stop)
-	go asg.ReceiveAssignments(asg_buttons, id)
+	go asg.ReceiveAssignments()
 	go elevator.handleErrors(error_chan)
 
 	for {
@@ -80,10 +86,9 @@ func setup(id int, driverAddr string, numFloors int) *elevator {
 func (e *elevator) handleButtonPress(b elevio.ButtonEvent) {
 	log.Printf("Pressed button %+v\n", b)
 
-	if b.Button == elevio.BT_Cab {
+	assigneeID := asg.Assign(b)
+	if b.Button == elevio.BT_Cab || assigneeID == _elevatorID {
 		e.addRequest(b)
-	} else {
-		asg.Assign(b)
 	}
 }
 
@@ -138,8 +143,6 @@ func (e *elevator) handleStopButton(isPressed bool) {
 func (e *elevator) addRequest(b elevio.ButtonEvent) {
 	e.requests[b.Floor][b.Button] = true
 	flushRequests(e.requests)
-
-	// TODO test reassignment => do we need to blast here or is regular heartbeat enough?
 
 	switch e.state {
 	case ST_Idle:

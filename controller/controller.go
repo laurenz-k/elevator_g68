@@ -273,6 +273,13 @@ func setCabButtonLights(requests [][3]bool) {
 	for f := 0; f < len(requests); f++ {
 		elevio.SetButtonLamp(elevio.BT_Cab, f, requests[f][elevio.BT_Cab])
 	}
+
+	if len(sts.GetAliveElevatorIDs()) == 1 {
+		for f := 0; f < len(requests); f++ {
+			elevio.SetButtonLamp(elevio.BT_HallDown, f, requests[f][elevio.BT_HallDown])
+			elevio.SetButtonLamp(elevio.BT_HallUp, f, requests[f][elevio.BT_HallUp])
+		}
+	}
 }
 
 func (e *elevator) handleErrors(errorChan chan string) {

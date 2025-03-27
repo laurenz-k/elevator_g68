@@ -86,8 +86,12 @@ func setup(id int, driverAddr string, numFloors int) *elevator {
 func (e *elevator) handleButtonPress(b elevio.ButtonEvent) {
 	log.Printf("Pressed button %+v\n", b)
 
+	if b.Button == elevio.BT_Cab {
+		e.addRequest(b)
+	}
+
 	assigneeID := asg.Assign(b)
-	if b.Button == elevio.BT_Cab || assigneeID == _elevatorID {
+	if _elevatorID == assigneeID {
 		e.addRequest(b)
 	}
 }

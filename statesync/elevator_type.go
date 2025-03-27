@@ -5,7 +5,6 @@ import (
 	"time"
 )
 
-// TODO maybe offline makes more sense as module-global variable?
 type elevatorState struct {
 	id            int
 	nonce         int
@@ -13,7 +12,6 @@ type elevatorState struct {
 	currDirection elevio.MotorDirection
 	request       [][3]bool
 	lastSync      time.Time
-	offline       bool //changed from online to offline because bool is false by default. will be changed once we figure it out
 }
 
 /**

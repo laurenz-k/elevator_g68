@@ -18,6 +18,7 @@ const syncTimeout = 3 * time.Second
 var mtx sync.RWMutex
 var states = make([]*elevatorState, 0, 10)
 var thisElevatorID int
+var offline bool = false
 
 func StartStatesync(elevator types.ElevatorState, reassignmentChan chan elevio.ButtonEvent, errorChan chan string) {
 	thisElevatorID = elevator.GetID()
@@ -46,7 +47,7 @@ func TurnOnElevator(elevatorID int) {
 	defer mtx.Unlock()
 
 	if elevatorID < len(states) && states[elevatorID] != nil {
-		states[elevatorID].offline = false
+		offline = false
 	}
 }
 
@@ -60,7 +61,7 @@ func TurnOffElevator(elevatorID int) {
 	defer mtx.Unlock()
 
 	if elevatorID < len(states) && states[elevatorID] != nil {
-		states[elevatorID].offline = true
+		offline = true
 	}
 }
 
@@ -86,7 +87,7 @@ func broadcastState(elevatorPtr types.ElevatorState) {
 	nonce := 0
 
 	for range ticker.C {
-		if myState.offline {
+		if offline {
 			continue
 		}
 		myState.id = elevatorPtr.GetID()
@@ -209,7 +210,7 @@ func GetAliveElevatorIDs() []int {
 
 	for id, s := range states {
 		if s != nil && time.Since(s.lastSync) <= syncTimeout {
-			if !s.offline {
+			if !offline {
 				alive = append(alive, id)
 			}
 		}

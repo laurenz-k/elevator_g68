@@ -110,7 +110,7 @@ func cost(call elevio.ButtonEvent) int {
 
 	for _, elevatorID := range aliveElevators {
 		state := statesync.GetState(elevatorID)
-		if reflect.Valueof(state).IsNil() {
+		if state == nil || reflect.ValueOf(state).IsNil() {
 			continue
 		}
 		cost := 0

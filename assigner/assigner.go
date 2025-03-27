@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"reflect"
 )
 
 const broadcastAddr = "255.255.255.255"
@@ -109,7 +110,7 @@ func cost(call elevio.ButtonEvent) int {
 
 	for _, elevatorID := range aliveElevators {
 		state := statesync.GetState(elevatorID)
-		if state == nil {
+		if reflect.Valueof(state).IsNil() {
 			continue
 		}
 		cost := 0

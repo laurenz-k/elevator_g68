@@ -209,7 +209,9 @@ func GetAliveElevatorIDs() []int {
 
 	for id, s := range states {
 		if s != nil && time.Since(s.lastSync) <= syncTimeout {
-			alive = append(alive, id)
+			if !s.offline {
+				alive = append(alive, id)
+			}
 		}
 	}
 	log.Printf("Alive elevators: %v", alive)

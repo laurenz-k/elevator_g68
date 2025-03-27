@@ -176,17 +176,6 @@ func (e *elevator) openAndCloseDoor() {
 	e.clearFloorRequests(prevDirection)
 
 	setCabButtonLights(e.requests)
-
-	time.AfterFunc(3*time.Second, func() {
-		for e.doorObstructed {
-			time.Sleep(20 * time.Millisecond)
-		}
-		elevio.SetDoorOpenLamp(false)
-
-		e.setNextDirection(prevDirection)
-
-		elevio.SetMotorDirection(e.direction)
-	})
 }
 
 func (e *elevator) stopOnCurrentFloor() bool {
@@ -229,23 +218,52 @@ func (e *elevator) clearFloorRequests(d elevio.MotorDirection) {
 	e.requests[e.floor][elevio.BT_Cab] = false
 
 	flushRequests(e.requests)
-
+	delay := 0 * time.Second
 	// same direction calls
 	if d == elevio.MD_Up {
-		e.requests[e.floor][elevio.BT_HallUp] = false
+		if e.requests[e.floor][elevio.BT_HallUp] {
+			delay = 3 * time.Second
+			e.requests[e.floor][elevio.BT_HallUp] = false
+		}
 	} else if d == elevio.MD_Down {
-		e.requests[e.floor][elevio.BT_HallDown] = false
+		if e.requests[e.floor][elevio.BT_HallDown] {
+			delay = 3 * time.Second
+			e.requests[e.floor][elevio.BT_HallDown] = false
+		}
 	} else if d == elevio.MD_Stop {
 		e.requests[e.floor][elevio.BT_HallUp] = false
 		e.requests[e.floor][elevio.BT_HallDown] = false
+		delay = 3 * time.Second
 	}
+	time.AfterFunc(delay, func() {
+		e.clearOtherFloorRequests(d)
+	})
+}
 
-	// opposite direction calls iff there's no more unfilled requests in direction
+func (e *elevator) clearOtherFloorRequests(d elevio.MotorDirection) {
+	delay := 0 * time.Second
 	if d == elevio.MD_Up && !hasRequestAbove(e.floor, e.requests) {
+		if e.requests[e.floor][elevio.BT_HallDown] {
+			delay = 3 * time.Second
+		}
 		e.requests[e.floor][elevio.BT_HallDown] = false
+
 	} else if d == elevio.MD_Down && !hasRequestBelow(e.floor, e.requests) {
+		if e.requests[e.floor][elevio.BT_HallUp] {
+			delay = 3 * time.Second
+		}
 		e.requests[e.floor][elevio.BT_HallUp] = false
 	}
+	time.AfterFunc(delay, func() {
+		for e.doorObstructed {
+			time.Sleep(20 * time.Millisecond)
+		}
+		elevio.SetDoorOpenLamp(false)
+
+		e.setNextDirection(d)
+
+		elevio.SetMotorDirection(e.direction)
+	})
 }
 
 // TODO make a pure function?

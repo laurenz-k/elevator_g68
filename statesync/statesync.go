@@ -360,7 +360,7 @@ func ElevatorStuck(elevator types.ElevatorState, errorChan chan string) {
 			break
 		}
 	}
-	if (hasActiveCalls) && (time.Since(lastActionTime) > 8*time.Second) {
+	if (hasActiveCalls) && (time.Since(lastActionTime) > 5*time.Second && !(elevator.GetDirection() == elevio.MD_Stop)) {
 		log.Printf("Elevator stuck with active calls and last action time %v", time.Since(lastActionTime))
 		errorChan <- "Elevator stuck"
 	}

@@ -3,11 +3,13 @@ package assigner
 import (
 	"elevator/elevio"
 	"elevator/statesync"
+	"encoding/binary"
+	"fmt"
 	"log"
 	"net"
 )
 
-// objective:
+// TODO
 // 	clearer separation of concerns
 // 	assign can assign directly to self without network
 // 	minimal interface
@@ -16,17 +18,35 @@ const broadcastAddr = "255.255.255.255"
 const broadcastPort = "20068"
 const transmissionBatchSize = 10
 
-type Assignment struct {
-	ElevatorID int
-	Button     elevio.ButtonEvent
+var _initialized bool
+var _elevatorID int
+var _nonce int
+var _assignmentChan chan elevio.ButtonEvent
+var _elevatorNonces map[int]int
+
+func Init(elevatorID int, assignmentChan chan elevio.ButtonEvent) {
+	if _initialized {
+		fmt.Println("assigner already initialized!")
+		return
+	}
+	_elevatorID = elevatorID
+	_nonce = 0
+	_assignmentChan = assignmentChan
+	_elevatorNonces = make(map[int]int)
+
+	_initialized = true
 }
 
-/**
- * @brief Establishes a UDP connection and listens for incoming assignments. When an assignment mathcing the elevator is received, it is deserialized
- * @param assignmentChan The channel to send the received assignment to.
- * @param thisElevatorID The ID of the elevator that should receive the assignment.
- */
-func ReceiveAssignments(assignmentChan chan elevio.ButtonEvent, thisElevatorID int) {
+type assignment struct {
+	assigneeID int
+	assignerID int
+	button     elevio.ButtonEvent
+	nonce      int
+}
+
+// ReceiveAssignments starts listening for assignments for this elevator
+// and forwards them to to assignment channel.
+func ReceiveAssignments(c chan elevio.ButtonEvent) {
 	addr, _ := net.ResolveUDPAddr("udp", broadcastAddr+":"+broadcastPort)
 	conn, _ := net.ListenUDP("udp", addr)
 
@@ -37,61 +57,49 @@ func ReceiveAssignments(assignmentChan chan elevio.ButtonEvent, thisElevatorID i
 	for {
 		n, _, _ := conn.ReadFromUDP(buf)
 		assignment := deserialize(buf[:n])
-		if assignment.ElevatorID == thisElevatorID {
-			assignmentChan <- assignment.Button
+		if assignment.assigneeID != _elevatorID {
+			continue
+		}
+
+		// deduplication
+		assignerNonce, exists := _elevatorNonces[assignment.assignerID]
+		if !exists || assignerNonce < assignment.nonce {
+			c <- assignment.button
+			_elevatorNonces[assignment.assignerID] = assignment.nonce
 		}
 	}
 }
 
-/**
- * @brief Asssigns a call to the best suited, alive elevator.
- *
- * @param request The call to be assigned.
- */
-func Assign(request elevio.ButtonEvent) {
-
-	// allready Assigned fails if we unplug ethernet => our own ID is stil part of alive elevator ID
-	// getRequests throws nil dereference
-
-	//Check if the call is already assigned to an elevator
-	// if alreadyAssigned(request) {
-	// 	log.Printf("Call already assigned")
-	// 	return
-	// }
-	//Obtain states of alive elevators, calculate their costs. Lowest cost wins. In a draw, lowest/highest ID wins.
-	aliveIDs := statesync.GetAliveElevatorIDs()
-	if len(aliveIDs) == 1 {
-		// TODO assign to yourself if you go offline => currently simply ignoring it
-		return
-	}
-	//Go through the costs of all elevators in loop with. Lowest wins.
-
-	winnerElevatorID := cost(request, aliveIDs)
-	log.Printf("Assigning call to elevator %d", winnerElevatorID)
+// Assign finds the cheapest elevator for handling an `request`. This information gets broadcast.
+// Returns the ID of the cheapest elevator.
+func Assign(request elevio.ButtonEvent) int {
+	assigneeID := cost(request)
+	log.Printf("Assigning call to elevator %d", assigneeID)
 
 	addr := broadcastAddr + ":" + broadcastPort
 	conn, err := net.Dial("udp", addr)
-
 	if err != nil {
-		log.Printf("Error dialing UDP: %v", err)
-		return
+		log.Printf("UDP error: %v", err)
+		return assigneeID
 	}
-
-	// TODO unpluging ethernet causes segfault => debug tomorrow
-
 	defer conn.Close()
 
-	assignment := Assignment{
-		ElevatorID: winnerElevatorID,
-		Button:     request,
+	assignment := assignment{
+		assigneeID: assigneeID,
+		assignerID: _elevatorID,
+		button:     request,
+		nonce:      _nonce,
 	}
+	_nonce++
 
-	// TODO might have to deduplicate by using nonce....
 	for range transmissionBatchSize {
 		conn.Write(serialize(assignment))
 	}
+
+	return assigneeID
 }
 
+// TODO investigate cost - must at least return one ID -> my ID
 /**
  * @brief Calculates the cost of assigning a call to every elevator still alive.
  *
@@ -99,7 +107,8 @@ func Assign(request elevio.ButtonEvent) {
  * @param aliveElevators The IDs of the alive elevators.
  * @return The ID of the elevator with the lowest cost.
  */
-func cost(call elevio.ButtonEvent, aliveElevators []int) int {
+func cost(call elevio.ButtonEvent) int {
+	aliveElevators := statesync.GetAliveElevatorIDs()
 	// TODO we should't assign to an elevator that's currently obstructed
 	lowestcost := 1000
 	lowestcostID := 0
@@ -149,33 +158,27 @@ func cost(call elevio.ButtonEvent, aliveElevators []int) int {
 	return lowestcostID
 }
 
-/**
- * @brief Serializes an assignment into a byte slice.
- *
- * @param assignment The assignment to serialize.
- * @return A byte slice representing the serialized assignment.
- */
-func serialize(assignment Assignment) []byte {
+// serializes an assignment into a byte slice.
+func serialize(assignment assignment) []byte {
 	buf := make([]byte, 0, 128)
-	buf = append(buf, uint8(assignment.ElevatorID))
-	buf = append(buf, uint8(assignment.Button.Floor))
-	buf = append(buf, uint8(assignment.Button.Button))
+	buf = append(buf, uint8(assignment.assigneeID))
+	buf = append(buf, uint8(assignment.button.Floor))
+	buf = append(buf, uint8(assignment.button.Button))
+	buf = append(buf, uint8(assignment.assignerID))
+	buf = binary.LittleEndian.AppendUint32(buf, uint32(assignment.nonce))
 	return buf
 }
 
-/**
- * @brief Deserializes a byte slice into an Assignment.
- *
- * @param m The byte slice containing serialized Assignment data.
- * @return The deserialized Assignment.
- */
-func deserialize(m []byte) Assignment {
-	assignment := Assignment{
-		ElevatorID: int(m[0]),
-		Button: elevio.ButtonEvent{
+// deserializes a byte slice into an Assignment.
+func deserialize(m []byte) assignment {
+	assignment := assignment{
+		assigneeID: int(m[0]),
+		button: elevio.ButtonEvent{
 			Floor:  int(m[1]),
 			Button: elevio.ButtonType(int(m[2])),
 		},
+		assignerID: int(m[3]),
+		nonce:      int(binary.LittleEndian.Uint32(m[4:8])),
 	}
 	return assignment
 }

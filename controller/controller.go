@@ -328,26 +328,17 @@ func (e *elevator) handleErrors(errorChan chan string) {
 				e.openAndCloseDoor()
 				sts.TurnOnElevator(myID)
 			}
-		case "Door obstruction moving":
-			sts.TurnOffElevator(myID)
-			if elevio.GetFloor() != -1 {
-				elevio.SetMotorDirection(elevio.MD_Stop)
-			} else {
-				elevio.SetMotorDirection(elevio.MD_Down)
-				for elevio.GetFloor() == -1 {
-					time.Sleep(20 * time.Millisecond)
-				}
-			}
-			e.openAndCloseDoor()
-			sts.TurnOnElevator(myID)
 		case "Door obstruction idle":
 			e.openAndCloseDoor()
-		case "Elevator stuck":
+		case "Elevator stuck", "Door obstruction moving":
 			sts.TurnOffElevator(myID)
 			for elevio.GetFloor() == -1 {
 				time.Sleep(20 * time.Millisecond)
 			}
 			sts.TurnOnElevator(myID)
+			if err == "Door obstruction moving" {
+				e.openAndCloseDoor()
+			}
 		}
 	}
 }

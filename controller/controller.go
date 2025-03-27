@@ -88,11 +88,11 @@ func (e *elevator) handleButtonPress(b elevio.ButtonEvent) {
 
 	if b.Button == elevio.BT_Cab {
 		e.addRequest(b)
-	}
-
-	assigneeID := asg.Assign(b)
-	if _elevatorID == assigneeID {
-		e.addRequest(b)
+	} else {
+		assigneeID := asg.Assign(b)
+		if _elevatorID == assigneeID {
+			e.addRequest(b)
+		}
 	}
 }
 

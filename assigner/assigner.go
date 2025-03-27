@@ -38,12 +38,12 @@ func cost(call elevio.ButtonEvent, aliveElevators []int) int {
 		if state.GetFloor() < call.Floor { //Checks if we are below the floor of the call
 			cost += call.Floor - state.GetFloor()       //The difference in floors between the elevator and call is added to the cost
 			if state.GetDirection() == elevio.MD_Down { //Checks if we are going in a direction opposite of the call
-				cost += 5
+				cost += 10
 			}
 		} else if state.GetFloor() > call.Floor { //Checks if we are above the floor of the call
 			cost += state.GetFloor() - call.Floor
 			if state.GetDirection() == elevio.MD_Up {
-				cost += 5
+				cost += 10
 			}
 		} else { //If we are neither above or below the floor, we are at the floor
 			cost = 0 //No cost associated with a call at the same floor
@@ -54,13 +54,13 @@ func cost(call elevio.ButtonEvent, aliveElevators []int) int {
 		if state.GetDirection() == elevio.MD_Up { //Checks how many stops we have in the upward direction and associates cost with each stop
 			for i := state.GetFloor(); i < len(requests[:][1])-1; i++ { //Iterates from floor above you to the top floor
 				if requests[i][0] || requests[i][2] { //Checks for cab calls or hall calls going upwards at the floor and associates cost with it
-					cost += 3
+					cost += 5
 				}
 			}
 		} else if state.GetDirection() == elevio.MD_Down { //Checks how many stops we have in the downward direction and associates cost with each stop
 			for i := state.GetFloor() - 2; i >= 0; i-- { //Iterates from floor below elevator to the bottom floor
 				if requests[i][1] || requests[i][2] { //Checks for cab calls or hall calls going upwards at the floor and associates cost with it
-					cost += 3
+					cost += 5
 				}
 			}
 		}

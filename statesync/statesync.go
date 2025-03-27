@@ -11,9 +11,11 @@ import (
 )
 
 const broadcastAddr = "255.255.255.255"
-const broadcastPort = "30068"
+const broadcastPort = "49234"
 const interval = 25 * time.Millisecond
 const syncTimeout = 3 * time.Second
+
+// we go offline =>
 
 var mtx sync.RWMutex
 var states = make([]*elevatorState, 0, 10)

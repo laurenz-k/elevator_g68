@@ -11,7 +11,7 @@ import (
 )
 
 const broadcastAddr = "255.255.255.255"
-const broadcastPort = "20068"
+const broadcastPort = "49235"
 const transmissionBatchSize = 10
 
 var _initialized bool

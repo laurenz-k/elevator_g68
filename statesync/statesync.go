@@ -75,7 +75,11 @@ func broadcastState(elevatorPtr types.ElevatorState) {
 	defer ticker.Stop()
 
 	addr := broadcastAddr + ":" + broadcastPort
-	conn, _ := net.Dial("udp", addr)
+	conn, err := net.Dial("udp", addr)
+	if err != nil {
+		log.Printf("Error dialing UDP: %v", err)
+		return
+	}
 	defer conn.Close()
 
 	var myState elevatorState

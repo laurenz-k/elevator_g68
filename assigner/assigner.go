@@ -28,6 +28,10 @@ func cost(call elevio.ButtonEvent, aliveElevators []int) int {
 	lowestcost := 1000
 	lowestcostID := 0
 
+	if len(aliveElevators) == 1 {
+		return aliveElevators[0]
+	}
+
 	for _, elevatorID := range aliveElevators {
 		state := statesync.GetState(elevatorID)
 		cost := 0
@@ -75,13 +79,20 @@ func cost(call elevio.ButtonEvent, aliveElevators []int) int {
  * @param request The call to be assigned.
  */
 func Assign(request elevio.ButtonEvent) {
+
+	// allready Assigned fails if we unplug ethernet => our own ID is stil part of alive elevator ID
+	// getRequests throws nil dereference
+
 	//Check if the call is already assigned to an elevator
-	if alreadyAssigned(request) {
-		log.Printf("Call already assigned")
-		return
-	}
+	// if alreadyAssigned(request) {
+	// 	log.Printf("Call already assigned")
+	// 	return
+	// }
 	//Obtain states of alive elevators, calculate their costs. Lowest cost wins. In a draw, lowest/highest ID wins.
 	aliveIDs := statesync.GetAliveElevatorIDs()
+	if len(aliveIDs) == 1 {
+		return
+	}
 	//Go through the costs of all elevators in loop with. Lowest wins.
 
 	winnerElevatorID := cost(request, aliveIDs)
@@ -113,7 +124,7 @@ func Assign(request elevio.ButtonEvent) {
 func alreadyAssigned(request elevio.ButtonEvent) bool {
 	aliveIDs := statesync.GetAliveElevatorIDs()
 	for _, elevatorID := range aliveIDs {
-		state := statesync.GetState(elevatorID)
+		state := statesync.GetState(elevatorID) // TODO this line maybe
 		if state.GetRequests()[request.Floor][int(request.Button)] {
 			return true
 		}

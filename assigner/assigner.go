@@ -42,25 +42,30 @@ type assignment struct {
 // ReceiveAssignments starts listening for assignments for this elevator
 // and forwards them to to assignment channel.
 func ReceiveAssignments() {
-	addr, _ := net.ResolveUDPAddr("udp", broadcastAddr+":"+broadcastPort)
-	conn, _ := net.ListenUDP("udp", addr)
-
-	defer conn.Close()
-
-	buf := make([]byte, 128)
-
 	for {
-		n, _, _ := conn.ReadFromUDP(buf)
-		assignment := deserialize(buf[:n])
-		if assignment.assigneeID != _elevatorID {
-			continue
-		}
+		addr, _ := net.ResolveUDPAddr("udp", broadcastAddr+":"+broadcastPort)
+		conn, _ := net.ListenUDP("udp", addr)
+		defer conn.Close()
 
-		// deduplication
-		assignerNonce, exists := _elevatorNonces[assignment.assignerID]
-		if !exists || assignerNonce < assignment.nonce {
-			_assignmentChan <- assignment.button
-			_elevatorNonces[assignment.assignerID] = assignment.nonce
+		buf := make([]byte, 128)
+
+		for {
+			n, _, err := conn.ReadFromUDP(buf)
+			if err != nil {
+				log.Println("ReceiveAssignments: issue reading from UDP - retrying")
+				break
+			}
+			assignment := deserialize(buf[:n])
+			if assignment.assigneeID != _elevatorID {
+				continue
+			}
+
+			// deduplication
+			assignerNonce, exists := _elevatorNonces[assignment.assignerID]
+			if !exists || assignerNonce < assignment.nonce {
+				_assignmentChan <- assignment.button
+				_elevatorNonces[assignment.assignerID] = assignment.nonce
+			}
 		}
 	}
 }

@@ -76,6 +76,10 @@ func setup(id int, driverAddr string, numFloors int) *elevator {
 		doorObstructed: false,
 	}
 
+	if elevator.requests[elevator.floor][elevio.BT_Cab] {
+		elevator.openAndCloseDoor()
+	}
+
 	elevator.setNextDirection(elevio.MD_Stop)
 	elevio.SetMotorDirection(elevator.direction)
 

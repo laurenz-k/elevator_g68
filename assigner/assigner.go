@@ -99,7 +99,12 @@ func Assign(request elevio.ButtonEvent) {
 	log.Printf("Assigning call to elevator %d", winnerElevatorID)
 
 	addr := broadcastAddr + ":" + broadcastPort
-	conn, _ := net.Dial("udp", addr)
+	conn, err := net.Dial("udp", addr)
+
+	if err != nil {
+		log.Printf("Error dialing UDP: %v", err)
+		return
+	}
 
 	// TODO unpluging ethernet causes segfault => debug tomorrow
 

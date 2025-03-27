@@ -93,10 +93,8 @@ func (e *elevator) handleButtonPress(b elevio.ButtonEvent) {
 }
 
 func (e *elevator) handleAssignment(b elevio.ButtonEvent) {
-	if !e.requests[b.Floor][b.Button] {
-		log.Printf("Received assignment: %+v\n", b)
-		e.addRequest(b)
-	}
+	log.Printf("Received assignment: %+v\n", b)
+	e.addRequest(b)
 }
 
 func (e *elevator) handleFloorChange(floorNum int, errorChan chan string) {

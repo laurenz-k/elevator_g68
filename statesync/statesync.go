@@ -79,8 +79,9 @@ func broadcastState(elevatorPtr types.ElevatorState) {
 		conn, err := net.Dial("udp", addr)
 		if err != nil {
 			log.Printf("Error dialing UDP: %v", err)
-			return
+			continue
 		}
+
 		defer conn.Close()
 
 		var myState elevatorState
@@ -98,7 +99,11 @@ func broadcastState(elevatorPtr types.ElevatorState) {
 
 			nonce++
 
-			conn.Write(serialize(myState))
+			_, err = conn.Write(serialize(myState))
+
+			if err != nil {
+				break
+			}
 		}
 	}
 }

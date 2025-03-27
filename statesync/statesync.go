@@ -173,9 +173,10 @@ func handleFailedSync(id int, s *elevatorState, reassignmentChan chan elevio.But
  * @param reassignmentChan The channel to send reassigned orders to.
  */
 func reassignOrders(s *elevatorState, reassignmentChan chan elevio.ButtonEvent) {
+	btns := [...]elevio.ButtonType{elevio.BT_HallDown, elevio.BT_HallUp}
 	for floor, order := range s.request {
-		for btn, active := range order {
-			if active {
+		for _, btn := range btns {
+			if order[btn] {
 				reassignmentChan <- elevio.ButtonEvent{
 					Floor:  floor,
 					Button: elevio.ButtonType(btn),

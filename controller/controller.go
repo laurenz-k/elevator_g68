@@ -214,11 +214,14 @@ func hasRequestBelow(currFloor int, requests [][3]bool) bool {
 }
 
 func (e *elevator) clearFloorRequests(d elevio.MotorDirection) {
-	// cab requests
-	e.requests[e.floor][elevio.BT_Cab] = false
-
-	flushRequests(e.requests)
 	delay := 0 * time.Second
+	// cab requests
+	if e.requests[e.floor][elevio.BT_Cab] {
+		delay = 3 * time.Second
+		e.requests[e.floor][elevio.BT_Cab] = false
+	}
+	flushRequests(e.requests)
+
 	// same direction calls
 	if d == elevio.MD_Up {
 		if e.requests[e.floor][elevio.BT_HallUp] {
@@ -243,16 +246,11 @@ func (e *elevator) clearFloorRequests(d elevio.MotorDirection) {
 func (e *elevator) clearOtherFloorRequests(d elevio.MotorDirection) {
 	delay := 0 * time.Second
 	if d == elevio.MD_Up && !hasRequestAbove(e.floor, e.requests) {
-		if e.requests[e.floor][elevio.BT_HallDown] {
-			delay = 3 * time.Second
-		}
 		e.requests[e.floor][elevio.BT_HallDown] = false
-
+		delay = 3 * time.Second
 	} else if d == elevio.MD_Down && !hasRequestBelow(e.floor, e.requests) {
-		if e.requests[e.floor][elevio.BT_HallUp] {
-			delay = 3 * time.Second
-		}
 		e.requests[e.floor][elevio.BT_HallUp] = false
+		delay = 3 * time.Second
 	}
 	time.AfterFunc(delay, func() {
 		for e.doorObstructed {

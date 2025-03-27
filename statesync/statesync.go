@@ -137,7 +137,7 @@ func monitorFailedSyncs(reassignmentChan chan elevio.ButtonEvent) {
 			if s == nil {
 				continue
 			}
-			if time.Since(s.lastSync) > syncTimeout {
+			if time.Since(s.lastSync) > syncTimeout && id != thisElevatorID {
 				handleFailedSync(id, s, reassignmentChan)
 			}
 		}
@@ -209,10 +209,8 @@ func GetAliveElevatorIDs() []int {
 	alive = append(alive, thisElevatorID)
 
 	for id, s := range states {
-		if s != nil && time.Since(s.lastSync) <= syncTimeout {
-			if !offline {
-				alive = append(alive, id)
-			}
+		if s != nil {
+			alive = append(alive, id)
 		}
 	}
 	log.Printf("Alive elevators: %v", alive)

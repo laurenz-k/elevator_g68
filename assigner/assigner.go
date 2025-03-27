@@ -7,6 +7,11 @@ import (
 	"net"
 )
 
+// objective:
+// 	clearer separation of concerns
+// 	assign can assign directly to self without network
+// 	minimal interface
+
 const broadcastAddr = "255.255.255.255"
 const broadcastPort = "20068"
 const transmissionBatchSize = 10
@@ -14,6 +19,77 @@ const transmissionBatchSize = 10
 type Assignment struct {
 	ElevatorID int
 	Button     elevio.ButtonEvent
+}
+
+/**
+ * @brief Establishes a UDP connection and listens for incoming assignments. When an assignment mathcing the elevator is received, it is deserialized
+ * @param assignmentChan The channel to send the received assignment to.
+ * @param thisElevatorID The ID of the elevator that should receive the assignment.
+ */
+func ReceiveAssignments(assignmentChan chan elevio.ButtonEvent, thisElevatorID int) {
+	addr, _ := net.ResolveUDPAddr("udp", broadcastAddr+":"+broadcastPort)
+	conn, _ := net.ListenUDP("udp", addr)
+
+	defer conn.Close()
+
+	buf := make([]byte, 128)
+
+	for {
+		n, _, _ := conn.ReadFromUDP(buf)
+		assignment := deserialize(buf[:n])
+		if assignment.ElevatorID == thisElevatorID {
+			assignmentChan <- assignment.Button
+		}
+	}
+}
+
+/**
+ * @brief Asssigns a call to the best suited, alive elevator.
+ *
+ * @param request The call to be assigned.
+ */
+func Assign(request elevio.ButtonEvent) {
+
+	// allready Assigned fails if we unplug ethernet => our own ID is stil part of alive elevator ID
+	// getRequests throws nil dereference
+
+	//Check if the call is already assigned to an elevator
+	// if alreadyAssigned(request) {
+	// 	log.Printf("Call already assigned")
+	// 	return
+	// }
+	//Obtain states of alive elevators, calculate their costs. Lowest cost wins. In a draw, lowest/highest ID wins.
+	aliveIDs := statesync.GetAliveElevatorIDs()
+	if len(aliveIDs) == 1 {
+		// TODO assign to yourself if you go offline => currently simply ignoring it
+		return
+	}
+	//Go through the costs of all elevators in loop with. Lowest wins.
+
+	winnerElevatorID := cost(request, aliveIDs)
+	log.Printf("Assigning call to elevator %d", winnerElevatorID)
+
+	addr := broadcastAddr + ":" + broadcastPort
+	conn, err := net.Dial("udp", addr)
+
+	if err != nil {
+		log.Printf("Error dialing UDP: %v", err)
+		return
+	}
+
+	// TODO unpluging ethernet causes segfault => debug tomorrow
+
+	defer conn.Close()
+
+	assignment := Assignment{
+		ElevatorID: winnerElevatorID,
+		Button:     request,
+	}
+
+	// TODO might have to deduplicate by using nonce....
+	for range transmissionBatchSize {
+		conn.Write(serialize(assignment))
+	}
 }
 
 /**
@@ -74,76 +150,12 @@ func cost(call elevio.ButtonEvent, aliveElevators []int) int {
 }
 
 /**
- * @brief Asssigns a call to the best suited, alive elevator.
- *
- * @param request The call to be assigned.
- */
-func Assign(request elevio.ButtonEvent) {
-
-	// allready Assigned fails if we unplug ethernet => our own ID is stil part of alive elevator ID
-	// getRequests throws nil dereference
-
-	//Check if the call is already assigned to an elevator
-	// if alreadyAssigned(request) {
-	// 	log.Printf("Call already assigned")
-	// 	return
-	// }
-	//Obtain states of alive elevators, calculate their costs. Lowest cost wins. In a draw, lowest/highest ID wins.
-	aliveIDs := statesync.GetAliveElevatorIDs()
-	if len(aliveIDs) == 1 {
-		return
-	}
-	//Go through the costs of all elevators in loop with. Lowest wins.
-
-	winnerElevatorID := cost(request, aliveIDs)
-	log.Printf("Assigning call to elevator %d", winnerElevatorID)
-
-	addr := broadcastAddr + ":" + broadcastPort
-	conn, err := net.Dial("udp", addr)
-
-	if err != nil {
-		log.Printf("Error dialing UDP: %v", err)
-		return
-	}
-
-	// TODO unpluging ethernet causes segfault => debug tomorrow
-
-	defer conn.Close()
-
-	assignment := Assignment{
-		ElevatorID: winnerElevatorID,
-		Button:     request,
-	}
-
-	// TODO might have to deduplicate by using nonce....
-	for range transmissionBatchSize {
-		conn.Write(serializeAssignment(assignment))
-	}
-}
-
-/**
- * @brief Checks if a call is already assigned to an elevator.
- *
- * @param request The call to be checked.
- */
-func alreadyAssigned(request elevio.ButtonEvent) bool {
-	aliveIDs := statesync.GetAliveElevatorIDs()
-	for _, elevatorID := range aliveIDs {
-		state := statesync.GetState(elevatorID) // TODO this line maybe
-		if state.GetRequests()[request.Floor][int(request.Button)] {
-			return true
-		}
-	}
-	return false
-}
-
-/**
  * @brief Serializes an assignment into a byte slice.
  *
  * @param assignment The assignment to serialize.
  * @return A byte slice representing the serialized assignment.
  */
-func serializeAssignment(assignment Assignment) []byte {
+func serialize(assignment Assignment) []byte {
 	buf := make([]byte, 0, 128)
 	buf = append(buf, uint8(assignment.ElevatorID))
 	buf = append(buf, uint8(assignment.Button.Floor))
@@ -157,7 +169,7 @@ func serializeAssignment(assignment Assignment) []byte {
  * @param m The byte slice containing serialized Assignment data.
  * @return The deserialized Assignment.
  */
-func deserializeAssignment(m []byte) Assignment {
+func deserialize(m []byte) Assignment {
 	assignment := Assignment{
 		ElevatorID: int(m[0]),
 		Button: elevio.ButtonEvent{
@@ -166,26 +178,4 @@ func deserializeAssignment(m []byte) Assignment {
 		},
 	}
 	return assignment
-}
-
-/**
- * @brief Establishes a UDP connection and listens for incoming assignments. When an assignment mathcing the elevator is received, it is deserialized
- * @param assignmentChan The channel to send the received assignment to.
- * @param thisElevatorID The ID of the elevator that should receive the assignment.
- */
-func ReceiveAssignments(assignmentChan chan elevio.ButtonEvent, thisElevatorID int) {
-	addr, _ := net.ResolveUDPAddr("udp", broadcastAddr+":"+broadcastPort)
-	conn, _ := net.ListenUDP("udp", addr)
-
-	defer conn.Close()
-
-	buf := make([]byte, 128)
-
-	for {
-		n, _, _ := conn.ReadFromUDP(buf)
-		assignment := deserializeAssignment(buf[:n])
-		if assignment.ElevatorID == thisElevatorID {
-			assignmentChan <- assignment.Button
-		}
-	}
 }

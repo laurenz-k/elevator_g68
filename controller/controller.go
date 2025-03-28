@@ -329,6 +329,7 @@ func (e *elevator) handleErrors(errorChan chan string) {
 				time.Sleep(20 * time.Millisecond)
 			}
 			e.floor = elevio.GetFloor()
+			e.direction = elevio.MD_Stop
 			e.openAndCloseDoor()
 		case "Elevator stuck":
 			sts.TurnOffElevator(myID)

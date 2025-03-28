@@ -147,6 +147,12 @@ func cost(call elevio.ButtonEvent) int {
 					cost += 5 // Add cost for stops in downward direction
 				}
 			}
+		} else {
+			for i := 0; i < len(requests[:][1])-1; i++ {
+				if requests[i][0] || requests[i][1] || requests[i][2] {
+					cost += 5
+				}
+			}
 		}
 
 		if cost < lowestcost {

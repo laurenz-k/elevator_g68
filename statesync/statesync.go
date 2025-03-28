@@ -105,9 +105,8 @@ func GetOrAggregatedLiveRequests(myRequests [][3]bool) [][3]bool {
 		}
 
 		for floor_i := range len(aggMatrix) {
-			for btn_i := range len(aggMatrix[floor_i]) {
-				aggMatrix[floor_i][btn_i] = aggMatrix[floor_i][btn_i] || state.request[floor_i][btn_i]
-			}
+			aggMatrix[floor_i][elevio.BT_HallDown] = aggMatrix[floor_i][elevio.BT_HallDown] || state.request[floor_i][elevio.BT_HallDown]
+			aggMatrix[floor_i][elevio.BT_HallUp] = aggMatrix[floor_i][elevio.BT_HallUp] || state.request[floor_i][elevio.BT_HallUp]
 		}
 	}
 

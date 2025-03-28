@@ -141,6 +141,7 @@ func (e *elevator) handleDoorObstruction(isObstructed bool, errorChan chan strin
 
 	if e.state == ST_DoorOpen {
 		e.doorObstructed = isObstructed
+		errorChan <- "Elevator obstructed normally"
 		return
 	} else {
 		errorChan <- "Door obstruction error"
@@ -331,7 +332,7 @@ func (e *elevator) processElevatorErrors(errorChan chan string) {
 		case "Unexpected move", "Door open move":
 			e.handleUnexpectedMove()
 
-		case "Door obstruction error":
+		case "Door obstruction error", "Elevator obstructed normally":
 			e.handleDoorObstructionError()
 
 		case "Elevator stuck":
@@ -352,8 +353,10 @@ func (e *elevator) handleUnexpectedMove() {
 }
 
 func (e *elevator) handleDoorObstructionError() {
+	sts.DisableHeartbeat()
 	moveToNearestFloor()
 	e.openAndCloseDoor()
+	sts.EnableHeartbeat()
 }
 
 func (e *elevator) handleElevatorStuck() {

@@ -160,10 +160,11 @@ func monitorFailedSyncs(reassignmentChan chan elevio.ButtonEvent) {
 func handleFailedSync(id int, s *elevatorState, reassignmentChan chan elevio.ButtonEvent) {
 	log.Printf("Elevator %d has not synced for over %v. Reassigning orders.", id, syncTimeout)
 
-	reassignOrders(s, reassignmentChan)
 	mtx.Lock()
 	states[id] = nil
 	mtx.Unlock()
+
+	reassignOrders(s, reassignmentChan)
 }
 
 /**

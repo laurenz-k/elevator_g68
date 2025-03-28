@@ -15,15 +15,13 @@ const broadcastPort = "49234"
 const interval = 25 * time.Millisecond
 const syncTimeout = 3 * time.Second
 
-// we go offline =>
-
-var mtx sync.RWMutex
-var states = make([]*elevatorState, 0, 10)
-var thisElevatorID int
-var offline bool = false
+var _mtx sync.RWMutex
+var _states = make([]*elevatorState, 0, 10)
+var _elevatorID int
+var _heartbeatDisabled bool = false
 
 func StartStatesync(elevator types.ElevatorState, reassignmentChan chan elevio.ButtonEvent, errorChan chan string) {
-	thisElevatorID = elevator.GetID()
+	_elevatorID = elevator.GetID()
 
 	go func() { //Check every second
 		ticker := time.NewTicker(1 * time.Second)
@@ -45,11 +43,12 @@ func StartStatesync(elevator types.ElevatorState, reassignmentChan chan elevio.B
  * @param elevatorID The ID of the elevator to turn on.
  */
 func TurnOnElevator(elevatorID int) {
-	mtx.Lock()
-	defer mtx.Unlock()
+	// TODO is this the right type of lock?
+	_mtx.Lock()
+	defer _mtx.Unlock()
 
-	if elevatorID < len(states) && states[elevatorID] != nil {
-		offline = false
+	if elevatorID < len(_states) && _states[elevatorID] != nil {
+		_heartbeatDisabled = false
 	}
 }
 
@@ -59,11 +58,11 @@ func TurnOnElevator(elevatorID int) {
  * @param elevatorID The ID of the elevator to turn off.
  */
 func TurnOffElevator(elevatorID int) {
-	mtx.Lock()
-	defer mtx.Unlock()
+	_mtx.Lock()
+	defer _mtx.Unlock()
 
-	if elevatorID < len(states) && states[elevatorID] != nil {
-		offline = true
+	if elevatorID < len(_states) && _states[elevatorID] != nil {
+		_heartbeatDisabled = true
 	}
 }
 
@@ -92,7 +91,7 @@ func broadcastState(elevatorPtr types.ElevatorState) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for range ticker.C {
-		if offline {
+		if _heartbeatDisabled {
 			continue
 		}
 		myState.id = elevatorPtr.GetID()
@@ -148,11 +147,11 @@ func monitorFailedSyncs(reassignmentChan chan elevio.ButtonEvent) {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		for id, s := range states {
+		for id, s := range _states {
 			if s == nil {
 				continue
 			}
-			if time.Since(s.lastSync) > syncTimeout && id != thisElevatorID {
+			if time.Since(s.lastSync) > syncTimeout && id != _elevatorID {
 				handleFailedSync(id, s, reassignmentChan)
 			}
 		}
@@ -169,9 +168,9 @@ func monitorFailedSyncs(reassignmentChan chan elevio.ButtonEvent) {
 func handleFailedSync(id int, s *elevatorState, reassignmentChan chan elevio.ButtonEvent) {
 	log.Printf("Elevator %d has not synced for over %v. Reassigning orders.", id, syncTimeout)
 
-	mtx.Lock()
-	states[id] = nil
-	mtx.Unlock()
+	_mtx.Lock()
+	_states[id] = nil
+	_mtx.Unlock()
 
 	reassignOrders(s, reassignmentChan)
 }
@@ -205,10 +204,10 @@ func reassignOrders(s *elevatorState, reassignmentChan chan elevio.ButtonEvent) 
  * @return Pointer to the elevatorState, or nil if not found.
  */
 func GetState(elevatorID int) types.ElevatorState {
-	mtx.RLock()
-	defer mtx.RUnlock()
-	if elevatorID < len(states) {
-		return states[elevatorID]
+	_mtx.RLock()
+	defer _mtx.RUnlock()
+	if elevatorID < len(_states) {
+		return _states[elevatorID]
 	}
 	return nil
 }
@@ -219,18 +218,18 @@ func GetState(elevatorID int) types.ElevatorState {
  * @return A slice of active elevator IDs.
  */
 func GetAliveElevatorIDs() []int {
-	mtx.RLock()
-	defer mtx.RUnlock()
+	_mtx.RLock()
+	defer _mtx.RUnlock()
 
-	alive := make([]int, 0, len(states))
+	alive := make([]int, 0, len(_states))
 
-	for id, s := range states {
+	for id, s := range _states {
 		if s != nil {
 			alive = append(alive, id)
 		}
 	}
 	log.Printf("Alive elevators: %v", alive)
-	alive = append(alive, thisElevatorID)
+	alive = append(alive, _elevatorID)
 	return alive
 }
 
@@ -291,19 +290,24 @@ func deserialize(m []byte) *elevatorState {
  * @param s The new state of the elevator.
  */
 func updateStates(s *elevatorState) {
-	mtx.Lock()
-	defer mtx.Unlock()
+	_mtx.Lock()
+	defer _mtx.Unlock()
 
 	id := s.id
-	if id >= len(states) {
-		states = append(states, make([]*elevatorState, (id+1)-len(states))...)
+	if id >= len(_states) {
+		_states = append(_states, make([]*elevatorState, (id+1)-len(_states))...)
 	}
 
-	vOld := states[id]
+	vOld := _states[id]
 	if vOld == nil || vOld.nonce < s.nonce {
-		states[id] = s
+		_states[id] = s
 	}
 }
+
+// TODO Refactor:
+//  call get alive elevators
+//  get state
+//  in controller => set lights from there
 
 // NOTE laurenz-k: maybe refactor to controller?
 var prevHallButtonLights [][2]bool
@@ -332,7 +336,7 @@ func lightHallButtons() {
  */
 func orAggregateAllLiveRequests() [][2]bool {
 	var floorCount int
-	for _, state := range states {
+	for _, state := range _states {
 		if state != nil {
 			floorCount = len(state.request)
 			break
@@ -341,7 +345,7 @@ func orAggregateAllLiveRequests() [][2]bool {
 
 	aggMatrix := make([][2]bool, floorCount)
 
-	for _, state := range states {
+	for _, state := range _states {
 		if state == nil || time.Since(state.lastSync) > syncTimeout {
 			continue
 		}
@@ -356,7 +360,7 @@ func orAggregateAllLiveRequests() [][2]bool {
 	return aggMatrix
 }
 
-// fits better with controller??
+// TODO fits better with controller??
 /**
  * @brief Detects if an elevator is stuck and sets its online flag accordingly.
  */

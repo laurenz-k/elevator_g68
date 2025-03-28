@@ -275,6 +275,8 @@ func (e *elevator) clearOppositeDirectionRequests(d elevio.MotorDirection) {
 		e.determineNextDirection(d)
 
 		elevio.SetMotorDirection(e.direction)
+
+		sts.EnableHeartbeat()
 	})
 }
 
@@ -356,7 +358,6 @@ func (e *elevator) handleDoorObstructionError() {
 	sts.DisableHeartbeat()
 	moveToNearestFloor()
 	e.openAndCloseDoor()
-	sts.EnableHeartbeat()
 }
 
 func (e *elevator) handleElevatorStuck() {

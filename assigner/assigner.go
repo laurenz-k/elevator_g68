@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"reflect"
+	"time"
 )
 
 const broadcastAddr = "255.255.255.255"
@@ -43,32 +44,45 @@ type assignment struct {
 // ReceiveAssignments starts listening for assignments for this elevator
 // and forwards them to to assignment channel.
 func ReceiveAssignments() {
-	for {
-		addr, _ := net.ResolveUDPAddr("udp", broadcastAddr+":"+broadcastPort)
-		conn, _ := net.ListenUDP("udp", addr)
-		defer conn.Close()
+	var conn *net.UDPConn
 
-		buf := make([]byte, 128)
+	ticker := time.NewTicker(1 * time.Second)
+	for range ticker.C {
+		addr, err := net.ResolveUDPAddr("udp", broadcastAddr+":"+broadcastPort)
+		fmt.Println(err) // TODO
+		conn, err = net.ListenUDP("udp", addr)
+		fmt.Println(err) // TODO
+		fmt.Println("end")
 
-		for {
-			n, _, err := conn.ReadFromUDP(buf)
-			if err != nil {
-				log.Println("ReceiveAssignments: issue reading from UDP - retrying")
-				break
-			}
-			assignment := deserialize(buf[:n])
-			if assignment.assigneeID != _elevatorID {
-				continue
-			}
-
-			// deduplication
-			assignerNonce, exists := _elevatorNonces[assignment.assignerID]
-			if !exists || assignerNonce < assignment.nonce {
-				_assignmentChan <- assignment.button
-				_elevatorNonces[assignment.assignerID] = assignment.nonce
-			}
+		if err == nil {
+			break
 		}
 	}
+	ticker.Stop()
+
+	defer conn.Close()
+
+	buf := make([]byte, 128)
+
+	for {
+		n, _, err := conn.ReadFromUDP(buf)
+		if err != nil {
+			log.Println("ReceiveAssignments: issue reading from UDP - retrying")
+			continue
+		}
+		assignment := deserialize(buf[:n])
+		if assignment.assigneeID != _elevatorID {
+			continue
+		}
+
+		// deduplication
+		assignerNonce, exists := _elevatorNonces[assignment.assignerID]
+		if !exists || assignerNonce < assignment.nonce {
+			_assignmentChan <- assignment.button
+			_elevatorNonces[assignment.assignerID] = assignment.nonce
+		}
+	}
+
 }
 
 // Assign finds the cheapest elevator for handling an `request`. This information gets broadcast.

@@ -9,47 +9,54 @@ import (
 	sts "elevator/statesync"
 )
 
+const (
+	doorOpenDelay     = 3 * time.Second
+	floorPollInterval = 20 * time.Millisecond
+)
+
 var _elevatorID int
 
-func StartControlLoop(id int, driverAddr string, numFloors int) {
-	_elevatorID = id
+func StartControlLoop(elevatorID int, driverAddr string, numFloors int) {
+	_elevatorID = elevatorID
 
-	drv_buttons := make(chan elevio.ButtonEvent)
-	drv_floors := make(chan int)
-	drv_obstr := make(chan bool)
-	drv_stop := make(chan bool)
-	asg_buttons := make(chan elevio.ButtonEvent)
-	error_chan := make(chan string)
+	buttonEvents := make(chan elevio.ButtonEvent)
+	floorEvents := make(chan int)
+	obstructionEvents := make(chan bool)
+	stopEvents := make(chan bool)
+	assignmentEvents := make(chan elevio.ButtonEvent)
+	errorEvents := make(chan string)
 
-	asg.Init(id, asg_buttons)
+	asg.Init(elevatorID, assignmentEvents)
 
-	elevator := initializeElevator(id, driverAddr, numFloors)
+	elevator := initializeElevator(elevatorID, driverAddr, numFloors)
 
-	sts.StartStatesync(elevator, drv_buttons, error_chan)
+	sts.StartStatesync(elevator, buttonEvents, errorEvents)
 
-	go elevio.PollButtons(drv_buttons)
-	go elevio.PollFloorSensor(drv_floors)
-	go elevio.PollObstructionSwitch(drv_obstr)
-	go elevio.PollStopButton(drv_stop)
+	// Start polling for events
+	go elevio.PollButtons(buttonEvents)
+	go elevio.PollFloorSensor(floorEvents)
+	go elevio.PollObstructionSwitch(obstructionEvents)
+	go elevio.PollStopButton(stopEvents)
 	go asg.ReceiveAssignments()
-	go elevator.processElevatorErrors(error_chan)
+	go elevator.processElevatorErrors(errorEvents)
 
+	// Main event loop
 	for {
 		select {
-		case a := <-drv_buttons:
-			elevator.handleButtonPress(a)
+		case button := <-buttonEvents:
+			elevator.handleButtonPress(button)
 
-		case a := <-asg_buttons:
-			elevator.handleAssignment(a)
+		case assignment := <-assignmentEvents:
+			elevator.handleAssignment(assignment)
 
-		case a := <-drv_floors:
-			elevator.handleFloorChange(a, error_chan)
+		case floor := <-floorEvents:
+			elevator.handleFloorChange(floor, errorEvents)
 
-		case a := <-drv_obstr:
-			elevator.handleDoorObstruction(a, error_chan)
+		case obstruction := <-obstructionEvents:
+			elevator.handleDoorObstruction(obstruction, errorEvents)
 
-		case a := <-drv_stop:
-			elevator.handleStopButton(a)
+		case stop := <-stopEvents:
+			elevator.handleStopButton(stop)
 		}
 	}
 }
@@ -57,15 +64,7 @@ func StartControlLoop(id int, driverAddr string, numFloors int) {
 func initializeElevator(id int, driverAddr string, numFloors int) *elevator {
 	elevio.Init(driverAddr, numFloors)
 
-	betweenFloors := elevio.GetFloor() == -1
-	if betweenFloors {
-		elevio.SetMotorDirection(elevio.MD_Up)
-		for elevio.GetFloor() == -1 {
-			time.Sleep(20 * time.Millisecond)
-		}
-		elevio.SetMotorDirection(elevio.MD_Stop)
-	}
-	elevio.SetFloorIndicator(elevio.GetFloor())
+	moveToNearestFloor()
 
 	elevator := &elevator{
 		id:             id,
@@ -86,6 +85,17 @@ func initializeElevator(id int, driverAddr string, numFloors int) *elevator {
 	}
 
 	return elevator
+}
+
+func moveToNearestFloor() {
+	if elevio.GetFloor() == -1 {
+		elevio.SetMotorDirection(elevio.MD_Up)
+		for elevio.GetFloor() == -1 {
+			time.Sleep(floorPollInterval)
+		}
+		elevio.SetMotorDirection(elevio.MD_Stop)
+	}
+	elevio.SetFloorIndicator(elevio.GetFloor())
 }
 
 func (e *elevator) handleButtonPress(b elevio.ButtonEvent) {
@@ -219,30 +229,25 @@ func hasRequestBelow(currFloor int, requests [][3]bool) bool {
 }
 
 func (e *elevator) clearRequestsOnCurrentFloor(d elevio.MotorDirection) {
-	delay := 0 * time.Second
-	// cab requests
+	delay := doorOpenDelay
+
+	// Clear cab requests
 	if e.requests[e.floor][elevio.BT_Cab] {
-		delay = 3 * time.Second
 		e.requests[e.floor][elevio.BT_Cab] = false
 	}
-	flushRequests(e.requests)
 
-	// same direction calls
-	if d == elevio.MD_Up {
-		if e.requests[e.floor][elevio.BT_HallUp] {
-			delay = 3 * time.Second
-			e.requests[e.floor][elevio.BT_HallUp] = false
-		}
-	} else if d == elevio.MD_Down {
-		if e.requests[e.floor][elevio.BT_HallDown] {
-			delay = 3 * time.Second
-			e.requests[e.floor][elevio.BT_HallDown] = false
-		}
+	// Clear same direction hall calls
+	if d == elevio.MD_Up && e.requests[e.floor][elevio.BT_HallUp] {
+		e.requests[e.floor][elevio.BT_HallUp] = false
+	} else if d == elevio.MD_Down && e.requests[e.floor][elevio.BT_HallDown] {
+		e.requests[e.floor][elevio.BT_HallDown] = false
 	} else if d == elevio.MD_Stop {
 		e.requests[e.floor][elevio.BT_HallUp] = false
 		e.requests[e.floor][elevio.BT_HallDown] = false
-		delay = 3 * time.Second
 	}
+
+	flushRequests(e.requests)
+
 	time.AfterFunc(delay, func() {
 		e.clearOppositeDirectionRequests(d)
 	})
@@ -253,17 +258,17 @@ func (e *elevator) clearOppositeDirectionRequests(d elevio.MotorDirection) {
 	if d == elevio.MD_Up && !hasRequestAbove(e.floor, e.requests) {
 		if e.requests[e.floor][elevio.BT_HallDown] {
 			e.requests[e.floor][elevio.BT_HallDown] = false
-			delay = 3 * time.Second
+			delay = doorOpenDelay
 		}
 	} else if d == elevio.MD_Down && !hasRequestBelow(e.floor, e.requests) {
 		if e.requests[e.floor][elevio.BT_HallUp] {
 			e.requests[e.floor][elevio.BT_HallUp] = false
-			delay = 3 * time.Second
+			delay = doorOpenDelay
 		}
 	}
 	time.AfterFunc(delay, func() {
 		for e.doorObstructed {
-			time.Sleep(20 * time.Millisecond)
+			time.Sleep(floorPollInterval)
 		}
 		elevio.SetDoorOpenLamp(false)
 
@@ -308,39 +313,46 @@ func updateCabButtonLights(requests [][3]bool) {
 }
 
 func (e *elevator) processElevatorErrors(errorChan chan string) {
-	myID := e.id
 	for {
 		err := <-errorChan
 		switch err {
 		case "Unexpected move", "Door open move":
-			sts.TurnOffElevator(myID)
-			if elevio.GetFloor() != -1 {
-				e.floor = elevio.GetFloor()
-				elevio.SetFloorIndicator(e.floor)
-				elevio.SetMotorDirection(elevio.MD_Stop)
-				e.state = ST_Idle
-				sts.TurnOnElevator(myID)
-			} else {
-				elevio.SetMotorDirection(elevio.MD_Down)
-				for elevio.GetFloor() == -1 {
-					time.Sleep(20 * time.Millisecond)
-				}
-				e.openAndCloseDoor()
-				sts.TurnOnElevator(myID)
-			}
+			e.handleUnexpectedMove()
+
 		case "Door obstruction error":
-			for elevio.GetFloor() == -1 {
-				time.Sleep(20 * time.Millisecond)
-			}
-			e.floor = elevio.GetFloor()
-			e.direction = elevio.MD_Stop
-			e.openAndCloseDoor()
+			e.handleDoorObstructionError()
+
 		case "Elevator stuck":
-			sts.TurnOffElevator(myID)
-			for elevio.GetFloor() == -1 {
-				time.Sleep(20 * time.Millisecond)
-			}
-			sts.TurnOnElevator(myID)
+			e.handleElevatorStuck()
 		}
 	}
+}
+
+func (e *elevator) handleUnexpectedMove() {
+	sts.TurnOffElevator(e.id)
+	if elevio.GetFloor() != -1 {
+		e.resetToIdle()
+	} else {
+		moveToNearestFloor()
+		e.openAndCloseDoor()
+	}
+	sts.TurnOnElevator(e.id)
+}
+
+func (e *elevator) handleDoorObstructionError() {
+	moveToNearestFloor()
+	e.openAndCloseDoor()
+}
+
+func (e *elevator) handleElevatorStuck() {
+	sts.TurnOffElevator(e.id)
+	moveToNearestFloor()
+	sts.TurnOnElevator(e.id)
+}
+
+func (e *elevator) resetToIdle() {
+	e.floor = elevio.GetFloor()
+	elevio.SetFloorIndicator(e.floor)
+	elevio.SetMotorDirection(elevio.MD_Stop)
+	e.state = ST_Idle
 }

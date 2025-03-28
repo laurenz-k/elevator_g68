@@ -74,25 +74,23 @@ func TurnOffElevator(elevatorID int) {
  */
 func broadcastState(elevatorPtr types.ElevatorState) {
 	var conn net.Conn
-	var err error
 
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-	for range ticker.C {
+	for {
+		var err error
 		addr := broadcastAddr + ":" + broadcastPort
 		conn, err = net.Dial("udp", addr)
 		if err == nil {
 			break
-		} else {
-			log.Printf("Error dialing UDP: %v", err)
 		}
+		time.Sleep(1 * time.Second)
 	}
-
 	defer conn.Close()
 
 	var myState elevatorState
 	nonce := 0
 
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 	for range ticker.C {
 		if offline {
 			continue
@@ -114,17 +112,26 @@ func broadcastState(elevatorPtr types.ElevatorState) {
  * @brief Listens for incoming elevator states over UDP and updates local states.
  */
 func receiveStates() {
-	addr, _ := net.ResolveUDPAddr("udp", ":"+broadcastPort)
-	conn, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		log.Printf("Error dialing UDP in reciveStates: %v", err)
-		return
+	var conn *net.UDPConn
+
+	for {
+		var err error
+		addr, _ := net.ResolveUDPAddr("udp", broadcastAddr+":"+broadcastPort)
+		conn, err = net.ListenUDP("udp", addr)
+
+		if err == nil {
+			break
+		}
+		time.Sleep(1 * time.Second)
 	}
 	defer conn.Close()
 
 	buf := make([]byte, 1024)
 	for {
-		n, _ := conn.Read(buf)
+		n, err := conn.Read(buf)
+		if err != nil {
+			continue
+		}
 		stateMsg := deserialize(buf[:n])
 		stateMsg.lastSync = time.Now()
 

@@ -46,28 +46,22 @@ type assignment struct {
 func ReceiveAssignments() {
 	var conn *net.UDPConn
 
-	ticker := time.NewTicker(1 * time.Second)
-	for range ticker.C {
-		addr, err := net.ResolveUDPAddr("udp", broadcastAddr+":"+broadcastPort)
-		fmt.Println(err) // TODO
+	for {
+		var err error
+		addr, _ := net.ResolveUDPAddr("udp", broadcastAddr+":"+broadcastPort)
 		conn, err = net.ListenUDP("udp", addr)
-		fmt.Println(err) // TODO
-		fmt.Println("end")
 
 		if err == nil {
 			break
 		}
+		time.Sleep(1 * time.Second)
 	}
-	ticker.Stop()
-
 	defer conn.Close()
 
 	buf := make([]byte, 128)
-
 	for {
 		n, _, err := conn.ReadFromUDP(buf)
 		if err != nil {
-			log.Println("ReceiveAssignments: issue reading from UDP - retrying")
 			continue
 		}
 		assignment := deserialize(buf[:n])

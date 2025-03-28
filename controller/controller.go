@@ -224,21 +224,25 @@ func hasRequestBelow(currFloor int, requests [][3]bool) bool {
 }
 
 func (e *elevator) clearRequestsOnCurrentFloor(d elevio.MotorDirection) {
-	delay := doorOpenDelay
+	delay := 0 * time.Second
 
 	// Clear cab requests
 	if e.requests[e.floor][elevio.BT_Cab] {
 		e.requests[e.floor][elevio.BT_Cab] = false
+		delay = doorOpenDelay
 	}
 
 	// Clear same direction hall calls
 	if d == elevio.MD_Up && e.requests[e.floor][elevio.BT_HallUp] {
 		e.requests[e.floor][elevio.BT_HallUp] = false
+		delay = doorOpenDelay
 	} else if d == elevio.MD_Down && e.requests[e.floor][elevio.BT_HallDown] {
 		e.requests[e.floor][elevio.BT_HallDown] = false
+		delay = doorOpenDelay
 	} else if d == elevio.MD_Stop {
 		e.requests[e.floor][elevio.BT_HallUp] = false
 		e.requests[e.floor][elevio.BT_HallDown] = false
+		delay = doorOpenDelay
 	}
 
 	flushRequests(e.requests)

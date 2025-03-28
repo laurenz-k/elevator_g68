@@ -280,7 +280,7 @@ func (e *elevator) clearOppositeDirectionRequests(d elevio.MotorDirection) {
 	})
 }
 
-// TODO make a pure function?
+
 func (e *elevator) determineNextDirection(d elevio.MotorDirection) {
 	// keeps same direction as long as there's requests in same direction left
 	if d == elevio.MD_Up && hasRequestAbove(e.floor, e.requests) {

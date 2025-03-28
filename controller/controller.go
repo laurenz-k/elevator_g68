@@ -356,6 +356,9 @@ func (e *elevator) handleDoorObstructionError() {
 	sts.DisableHeartbeat()
 	moveToNearestFloor()
 	e.openAndCloseDoor()
+	for e.doorObstructed {
+		time.Sleep(floorPollInterval)
+	}
 	sts.EnableHeartbeat()
 }
 

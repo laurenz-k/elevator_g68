@@ -356,7 +356,7 @@ func orAggregateAllLiveRequests() [][2]bool {
 	return aggMatrix
 }
 
-// fits better with controller??
+
 /**
  * @brief Detects if an elevator is stuck and sets its online flag accordingly.
  */

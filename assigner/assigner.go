@@ -79,7 +79,7 @@ func ReceiveAssignments() {
 
 }
 
-// Assign finds the cheapest elevator for handling an `request`. This information gets broadcast.
+// Assign finds the cheapest elevator for handling a `request`. This information gets broadcast.
 // Returns the ID of the cheapest elevator.
 func Assign(request elevio.ButtonEvent) int {
 	assigneeID := cost(request)
@@ -108,56 +108,53 @@ func Assign(request elevio.ButtonEvent) int {
 	return assigneeID
 }
 
-// cost returns ID of best currently availible elevator.
-// Returns at least the ID of the initializing elevator.
+// cost returns the ID of the best currently available elevator for the given call.
 func cost(call elevio.ButtonEvent) int {
-	aliveElevators := statesync.GetAliveElevatorIDs()
+    aliveElevators := statesync.GetAliveElevatorIDs()
 
-	lowestcost := 1000
-	lowestcostID := _elevatorID
+    lowestcost := 1000
+    lowestcostID := _elevatorID
 
-	for _, elevatorID := range aliveElevators {
-		state := statesync.GetState(elevatorID)
-		if state == nil || reflect.ValueOf(state).IsNil() {
-			continue
-		}
-		cost := 0
-		if state.GetFloor() < call.Floor { //Checks if we are below the floor of the call
-			cost += call.Floor - state.GetFloor()       //The difference in floors between the elevator and call is added to the cost
-			if state.GetDirection() == elevio.MD_Down { //Checks if we are going in a direction opposite of the call
-				cost += 10
-			}
-		} else if state.GetFloor() > call.Floor { //Checks if we are above the floor of the call
-			cost += state.GetFloor() - call.Floor
-			if state.GetDirection() == elevio.MD_Up {
-				cost += 10
-			}
-		} else { //If we are neither above or below the floor, we are at the floor
-			cost = 0 //No cost associated with a call at the same floor
-		}
+    for _, elevatorID := range aliveElevators {
+        state := statesync.GetState(elevatorID)
+        if state == nil || reflect.ValueOf(state).IsNil() {
+            continue
+        }
+        cost := 0
+        if state.GetFloor() < call.Floor {
+            cost += call.Floor - state.GetFloor() // Add floor difference
+            if state.GetDirection() == elevio.MD_Down {
+                cost += 10 // Penalty for opposite direction
+            }
+        } else if state.GetFloor() > call.Floor {
+            cost += state.GetFloor() - call.Floor
+            if state.GetDirection() == elevio.MD_Up {
+                cost += 10 // Penalty for opposite direction
+            }
+        }
 
-		requests := state.GetRequests()
+        requests := state.GetRequests()
 
-		if state.GetDirection() == elevio.MD_Up { //Checks how many stops we have in the upward direction and associates cost with each stop
-			for i := state.GetFloor(); i < len(requests[:][1])-1; i++ { //Iterates from floor above you to the top floor
-				if requests[i][0] || requests[i][2] { //Checks for cab calls or hall calls going upwards at the floor and associates cost with it
-					cost += 5
-				}
-			}
-		} else if state.GetDirection() == elevio.MD_Down { //Checks how many stops we have in the downward direction and associates cost with each stop
-			for i := state.GetFloor() - 2; i >= 0; i-- { //Iterates from floor below elevator to the bottom floor
-				if requests[i][1] || requests[i][2] { //Checks for cab calls or hall calls going upwards at the floor and associates cost with it
-					cost += 5
-				}
-			}
-		}
+        if state.GetDirection() == elevio.MD_Up {
+            for i := state.GetFloor(); i < len(requests[:][1])-1; i++ {
+                if requests[i][0] || requests[i][2] {
+                    cost += 5 // Add cost for stops in upward direction
+                }
+            }
+        } else if state.GetDirection() == elevio.MD_Down {
+            for i := state.GetFloor() - 2; i >= 0; i-- {
+                if requests[i][1] || requests[i][2] {
+                    cost += 5 // Add cost for stops in downward direction
+                }
+            }
+        }
 
-		if cost < lowestcost {
-			lowestcost = cost
-			lowestcostID = elevatorID
-		}
-	}
-	return lowestcostID
+        if cost < lowestcost {
+            lowestcost = cost
+            lowestcostID = elevatorID
+        }
+    }
+    return lowestcostID
 }
 
 // serializes an assignment into a byte slice.

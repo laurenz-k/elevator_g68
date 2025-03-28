@@ -56,38 +56,22 @@ func deserialize(m []byte) *elevatorState {
 	return elevatorState
 }
 
-/**
- * @brief Gets the ID of the elevator.
- *
- * @return The ID of the elevator.
- */
+// Gets the ID of the elevator.
 func (e *elevatorState) GetID() int {
 	return int(e.id)
 }
 
-/**
- * @brief Gets the current floor of the elevator.
- *
- * @return The current floor of the elevator.
- */
+// Gets the current floor of the elevator.
 func (e *elevatorState) GetFloor() int {
 	return int(e.currFloor)
 }
 
-/**
- * @brief Gets the current direction of the elevator.
- *
- * @return The current direction of the elevator.
- */
+// Gets the current direction of the elevator.
 func (e *elevatorState) GetDirection() elevio.MotorDirection {
 	return e.currDirection
 }
 
-/**
- * @brief Gets the requests of the elevator.
- *
- * @return A copy of the requests of the elevator.
- */
+// Gets the requests of the elevator.
 func (e *elevatorState) GetRequests() [][3]bool {
 	requestsCopy := make([][3]bool, len(e.request))
 	for i, requests := range e.request {

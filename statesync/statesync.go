@@ -234,10 +234,7 @@ func updateStates(s *elevatorState) {
 	}
 }
 
-// TODO fits better with controller??
-/**
- * @brief Detects if an elevator is stuck and sets its online flag accordingly.
- */
+// Detects if an elevator is stuck and sets its online flag accordingly.
 func ElevatorStuck(elevator types.ElevatorState, errorChan chan string) {
 	timeSinceLastAction(elevator)
 	hasActiveCalls := false
@@ -264,9 +261,7 @@ var lastActionTime time.Time
 var prevFloor int
 var prevDirection elevio.MotorDirection
 
-/**
- * @brief Updates the lastActionTime of an elevator if it changes direction or floor.
- */
+// Updates the lastActionTime of an elevator if it changes direction or floor.
 func timeSinceLastAction(elevator types.ElevatorState) {
 	if elevator.GetFloor() != prevFloor || elevator.GetDirection() != prevDirection {
 		lastActionTime = time.Now()

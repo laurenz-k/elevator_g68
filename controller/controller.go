@@ -300,6 +300,12 @@ func setButtonLights(requests [][3]bool) {
 
 	prevLights := make([][3]bool, len(requests))
 
+	for i := range prevLights {
+		for j := range prevLights[i] {
+			prevLights[i][j] = true
+		}
+	}
+
 	for range ticker.C {
 		currLights := sts.GetOrAggregatedLiveRequests(requests)
 

@@ -110,51 +110,57 @@ func Assign(request elevio.ButtonEvent) int {
 
 // cost returns the ID of the best currently available elevator for the given call.
 func cost(call elevio.ButtonEvent) int {
-    aliveElevators := statesync.GetAliveElevatorIDs()
+	aliveElevators := statesync.GetAliveElevatorIDs()
 
-    lowestcost := 1000
-    lowestcostID := _elevatorID
+	lowestcost := 1000
+	lowestcostID := _elevatorID
 
-    for _, elevatorID := range aliveElevators {
-        state := statesync.GetState(elevatorID)
-        if state == nil || reflect.ValueOf(state).IsNil() {
-            continue
-        }
-        cost := 0
-        if state.GetFloor() < call.Floor {
-            cost += call.Floor - state.GetFloor() // Add floor difference
-            if state.GetDirection() == elevio.MD_Down {
-                cost += 10 // Penalty for opposite direction
-            }
-        } else if state.GetFloor() > call.Floor {
-            cost += state.GetFloor() - call.Floor
-            if state.GetDirection() == elevio.MD_Up {
-                cost += 10 // Penalty for opposite direction
-            }
-        }
+	for _, elevatorID := range aliveElevators {
+		state := statesync.GetState(elevatorID)
+		if state == nil || reflect.ValueOf(state).IsNil() {
+			continue
+		}
+		cost := 0
+		if state.GetFloor() < call.Floor {
+			cost += call.Floor - state.GetFloor() // Add floor difference
+			if state.GetDirection() == elevio.MD_Down {
+				cost += 10 // Penalty for opposite direction
+			}
+		} else if state.GetFloor() > call.Floor {
+			cost += state.GetFloor() - call.Floor
+			if state.GetDirection() == elevio.MD_Up {
+				cost += 10 // Penalty for opposite direction
+			}
+		}
 
-        requests := state.GetRequests()
+		requests := state.GetRequests()
 
-        if state.GetDirection() == elevio.MD_Up {
-            for i := state.GetFloor(); i < len(requests[:][1])-1; i++ {
-                if requests[i][0] || requests[i][2] {
-                    cost += 5 // Add cost for stops in upward direction
-                }
-            }
-        } else if state.GetDirection() == elevio.MD_Down {
-            for i := state.GetFloor() - 2; i >= 0; i-- {
-                if requests[i][1] || requests[i][2] {
-                    cost += 5 // Add cost for stops in downward direction
-                }
-            }
-        }
+		if state.GetDirection() == elevio.MD_Up {
+			for i := state.GetFloor(); i < len(requests[:][1])-1; i++ {
+				if requests[i][0] || requests[i][2] {
+					cost += 5 // Add cost for stops in upward direction
+				}
+			}
+		} else if state.GetDirection() == elevio.MD_Down {
+			for i := state.GetFloor() - 2; i >= 0; i-- {
+				if requests[i][1] || requests[i][2] {
+					cost += 5 // Add cost for stops in downward direction
+				}
+			}
+		} else {
+			for i := 0; i < len(requests[:][1])-1; i++ {
+				if requests[i][0] || requests[i][1] || requests[i][2] {
+					cost += 5
+				}
+			}
+		}
 
-        if cost < lowestcost {
-            lowestcost = cost
-            lowestcostID = elevatorID
-        }
-    }
-    return lowestcostID
+		if cost < lowestcost {
+			lowestcost = cost
+			lowestcostID = elevatorID
+		}
+	}
+	return lowestcostID
 }
 
 // serializes an assignment into a byte slice.

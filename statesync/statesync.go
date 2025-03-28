@@ -3,7 +3,7 @@ package statesync
 import (
 	"elevator/elevio"
 	"elevator/types"
-	"encoding/binary"
+	"fmt"
 	"log"
 	"net"
 	"sync"
@@ -15,15 +15,22 @@ const broadcastPort = "49234"
 const interval = 25 * time.Millisecond
 const syncTimeout = 3 * time.Second
 
-// we go offline =>
+var _initialized bool
+var _mtx sync.RWMutex
+var _states = make([]*elevatorState, 0, 10)
+var _elevatorID int
+var _heartbeatDisabled bool = false
 
-var mtx sync.RWMutex
-var states = make([]*elevatorState, 0, 10)
-var thisElevatorID int
-var offline bool = false
+// Init start continuously broadcasting the state of the initialized elevator and receiving
+// states of other elevators and maintains a set of alive elevators.
+// Use `GetAliveElevatorIDs` and `GetState` to obtain live elevators.
+func Init(elevator types.ElevatorState, reassignmentChan chan elevio.ButtonEvent, errorChan chan string) {
+	if _initialized {
+		fmt.Println("assigner already initialized!")
+		return
+	}
 
-func StartStatesync(elevator types.ElevatorState, reassignmentChan chan elevio.ButtonEvent, errorChan chan string) {
-	thisElevatorID = elevator.GetID()
+	_elevatorID = elevator.GetID()
 
 	go func() { //Check every second
 		ticker := time.NewTicker(1 * time.Second)
@@ -37,41 +44,76 @@ func StartStatesync(elevator types.ElevatorState, reassignmentChan chan elevio.B
 	go broadcastState(elevator)
 	go receiveStates()
 	go monitorFailedSyncs(reassignmentChan)
+
+	_initialized = true
 }
 
-/**
- * @brief Turns the elevator on.
- *
- * @param elevatorID The ID of the elevator to turn on.
- */
-func TurnOnElevator(elevatorID int) {
-	mtx.Lock()
-	defer mtx.Unlock()
+// EnableHeartbeat starts sending state messages to other elevators.
+func EnableHeartbeat() {
+	_mtx.Lock()
+	defer _mtx.Unlock()
 
-	if elevatorID < len(states) && states[elevatorID] != nil {
-		offline = false
+	if _elevatorID < len(_states) && _states[_elevatorID] != nil {
+		_heartbeatDisabled = false
 	}
 }
 
-/**
- * @brief Turns the elevator off.
- *
- * @param elevatorID The ID of the elevator to turn off.
- */
-func TurnOffElevator(elevatorID int) {
-	mtx.Lock()
-	defer mtx.Unlock()
+// DisableHeartbeat stops sending state messages to other elevators.
+func DisableHeartbeat() {
+	_mtx.Lock()
+	defer _mtx.Unlock()
 
-	if elevatorID < len(states) && states[elevatorID] != nil {
-		offline = true
+	if _elevatorID < len(_states) && _states[_elevatorID] != nil {
+		_heartbeatDisabled = true
 	}
 }
 
-/**
- * @brief Broadcasts the elevator's state over UDP at regular intervals.
- *
- * @param elevatorPtr The current state of the elevator to broadcast.
- */
+// GetState of the elevator with `elevatorID`. Retruns nil if there's no up to date information.
+func GetState(elevatorID int) types.ElevatorState {
+	_mtx.RLock()
+	defer _mtx.RUnlock()
+	if elevatorID < len(_states) {
+		return _states[elevatorID]
+	}
+	return nil
+}
+
+// GetAliveElevatorIDs returns a slice of IDs of all elevators which have synced within the timeout.
+func GetAliveElevatorIDs() []int {
+	_mtx.RLock()
+	defer _mtx.RUnlock()
+
+	alive := make([]int, 0, len(_states))
+
+	for id, s := range _states {
+		if s != nil || id == _elevatorID {
+			alive = append(alive, id)
+		}
+	}
+	log.Printf("Alive elevators: %v", alive)
+	return alive
+}
+
+// Or aggregates requests from all live elevators and `myRequests`.
+func GetOrAggregatedLiveRequests(myRequests [][3]bool) [][3]bool {
+	aggMatrix := make([][3]bool, len(myRequests))
+	copy(aggMatrix, myRequests)
+
+	for _, state := range _states {
+		if state == nil {
+			continue
+		}
+
+		for floor_i := range len(aggMatrix) {
+			aggMatrix[floor_i][elevio.BT_HallDown] = aggMatrix[floor_i][elevio.BT_HallDown] || state.request[floor_i][elevio.BT_HallDown]
+			aggMatrix[floor_i][elevio.BT_HallUp] = aggMatrix[floor_i][elevio.BT_HallUp] || state.request[floor_i][elevio.BT_HallUp]
+		}
+	}
+
+	return aggMatrix
+}
+
+// Broadcasts the elevator's state over UDP at regular intervals.
 func broadcastState(elevatorPtr types.ElevatorState) {
 	var conn net.Conn
 
@@ -92,7 +134,7 @@ func broadcastState(elevatorPtr types.ElevatorState) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for range ticker.C {
-		if offline {
+		if _heartbeatDisabled {
 			continue
 		}
 		myState.id = elevatorPtr.GetID()
@@ -108,9 +150,7 @@ func broadcastState(elevatorPtr types.ElevatorState) {
 
 }
 
-/**
- * @brief Listens for incoming elevator states over UDP and updates local states.
- */
+// Listens for incoming elevator states over UDP and updates local states.
 func receiveStates() {
 	var conn *net.UDPConn
 
@@ -136,230 +176,65 @@ func receiveStates() {
 		stateMsg.lastSync = time.Now()
 
 		updateStates(stateMsg)
-		lightHallButtons()
 	}
 }
 
-/**
- * @brief Monitors elevator states and reassigns orders if an elevator is out of sync.
- */
+// Monitors elevator states and reassigns orders if an elevator is out of sync.
 func monitorFailedSyncs(reassignmentChan chan elevio.ButtonEvent) {
 	ticker := time.NewTicker(syncTimeout)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		for id, s := range states {
+		for id, s := range _states {
 			if s == nil {
 				continue
 			}
-			if time.Since(s.lastSync) > syncTimeout && id != thisElevatorID {
-				handleFailedSync(id, s, reassignmentChan)
+			if time.Since(s.lastSync) > syncTimeout && id != _elevatorID {
+				log.Printf("Elevator %d has not synced for over %v. Reassigning orders.", id, syncTimeout)
+
+				_mtx.Lock()
+				_states[id] = nil
+				_mtx.Unlock()
+
+				reassignOrders(s.request, reassignmentChan)
 			}
 		}
 	}
 }
 
-/**
- * @brief Handles a failed sync by reassigning orders and clearing the elevator's state.
- *
- * @param id The ID of the elevator that failed to sync.
- * @param s The state of the elevator that failed to sync.
- * @param reassignmentChan The channel to send reassigned orders to.
- */
-func handleFailedSync(id int, s *elevatorState, reassignmentChan chan elevio.ButtonEvent) {
-	log.Printf("Elevator %d has not synced for over %v. Reassigning orders.", id, syncTimeout)
-
-	mtx.Lock()
-	states[id] = nil
-	mtx.Unlock()
-
-	reassignOrders(s, reassignmentChan)
-}
-
-/**
- * @brief Reassigns all active orders from a failed elevator to the reassignment channel.
- *
- * @param s The state of the elevator that failed to sync.
- * @param reassignmentChan The channel to send reassigned orders to.
- */
-func reassignOrders(s *elevatorState, reassignmentChan chan elevio.ButtonEvent) {
+// reassignOrders detects an elevators (`id`) which failed to sync and reasigns it's orders.
+func reassignOrders(orders [][3]bool, reassignmentChan chan elevio.ButtonEvent) {
 	btns := [...]elevio.ButtonType{elevio.BT_HallDown, elevio.BT_HallUp}
-	for floor, order := range s.request {
+	for floor, order := range orders {
 		for _, btn := range btns {
 			if order[btn] {
 				reassignmentChan <- elevio.ButtonEvent{
 					Floor:  floor,
 					Button: elevio.ButtonType(btn),
 				}
-				log.Printf("Reassigning order from elevator %d: %d %d", s.id, floor, btn)
-				s.request[floor][btn] = false
+				orders[floor][btn] = false
 			}
 		}
 	}
 }
 
-/**
- * @brief Retrieves the stored state of the given elevator.
- *
- * @param elevatorID The ID of the elevator.
- * @return Pointer to the elevatorState, or nil if not found.
- */
-func GetState(elevatorID int) types.ElevatorState {
-	mtx.RLock()
-	defer mtx.RUnlock()
-	if elevatorID < len(states) {
-		return states[elevatorID]
-	}
-	return nil
-}
-
-/**
- * @brief Gets the IDs of all elevators that have synced within the timeout.
- *
- * @return A slice of active elevator IDs.
- */
-func GetAliveElevatorIDs() []int {
-	mtx.RLock()
-	defer mtx.RUnlock()
-
-	alive := make([]int, 0, len(states))
-
-	for id, s := range states {
-		if s != nil {
-			alive = append(alive, id)
-		}
-	}
-	log.Printf("Alive elevators: %v", alive)
-	alive = append(alive, thisElevatorID)
-	return alive
-}
-
-/**
- * @brief Serializes an elevatorState into a byte slice.
- *
- * @param s The elevator state to serialize.
- * @return A byte slice representing the serialized state.
- */
-func serialize(s elevatorState) []byte {
-	buf := make([]byte, 0, 128)
-
-	buf = append(buf, uint8(s.id))
-	buf = binary.LittleEndian.AppendUint32(buf, uint32(s.nonce))
-	buf = append(buf, uint8(s.currFloor))
-	buf = append(buf, byte(s.currDirection))
-
-	for _, row := range s.request {
-		for _, btn := range row {
-			btnByte := byte(0)
-			if btn {
-				btnByte = 1
-			}
-			buf = append(buf, btnByte)
-		}
-	}
-
-	return buf
-}
-
-/**
- * @brief Deserializes a byte slice into an elevatorState.
- *
- * @param m The byte slice containing serialized elevator state data.
- * @return Pointer to the deserialized elevatorState.
- */
-func deserialize(m []byte) *elevatorState {
-	elevatorState := &elevatorState{
-		id:            int(m[0]),
-		nonce:         int(binary.LittleEndian.Uint32(m[1:5])),
-		currFloor:     int(m[5]),
-		currDirection: elevio.MotorDirection(int8(m[6])),
-		request:       make([][3]bool, 0, 128),
-	}
-
-	offset := 7
-	for i := offset; i < len(m); i += 3 {
-		currRow := [3]bool{m[i] == 1, m[i+1] == 1, m[i+2] == 1}
-		elevatorState.request = append(elevatorState.request, currRow)
-	}
-
-	return elevatorState
-}
-
-/**
- * @brief Updates the stored state of an elevator.
- *
- * @param s The new state of the elevator.
- */
+// Updates the stored state of an elevator `s`.
 func updateStates(s *elevatorState) {
-	mtx.Lock()
-	defer mtx.Unlock()
+	_mtx.Lock()
+	defer _mtx.Unlock()
 
 	id := s.id
-	if id >= len(states) {
-		states = append(states, make([]*elevatorState, (id+1)-len(states))...)
+	if id >= len(_states) {
+		_states = append(_states, make([]*elevatorState, (id+1)-len(_states))...)
 	}
 
-	vOld := states[id]
+	vOld := _states[id]
 	if vOld == nil || vOld.nonce < s.nonce {
-		states[id] = s
+		_states[id] = s
 	}
 }
 
-// NOTE laurenz-k: maybe refactor to controller?
-var prevHallButtonLights [][2]bool
-
-/**
- * @brief Lights up the hall buttons based on the aggregated requests.
- */
-func lightHallButtons() {
-	buttonsToLight := orAggregateAllLiveRequests()
-
-	for i, row := range buttonsToLight {
-		for j, val := range row {
-			if prevHallButtonLights == nil || prevHallButtonLights[i][j] != val {
-				elevio.SetButtonLamp(elevio.ButtonType(j), i, val)
-			}
-		}
-	}
-
-	prevHallButtonLights = buttonsToLight
-}
-
-/**
- * @brief Aggregates all live requests from all elevators.
- *
- * @return A 2D slice representing the aggregated requests.
- */
-func orAggregateAllLiveRequests() [][2]bool {
-	var floorCount int
-	for _, state := range states {
-		if state != nil {
-			floorCount = len(state.request)
-			break
-		}
-	}
-
-	aggMatrix := make([][2]bool, floorCount)
-
-	for _, state := range states {
-		if state == nil || time.Since(state.lastSync) > syncTimeout {
-			continue
-		}
-
-		for floor_i := range len(aggMatrix) {
-			for btn_i := range len(aggMatrix[floor_i]) {
-				aggMatrix[floor_i][btn_i] = aggMatrix[floor_i][btn_i] || state.request[floor_i][btn_i]
-			}
-		}
-	}
-
-	return aggMatrix
-}
-
-
-/**
- * @brief Detects if an elevator is stuck and sets its online flag accordingly.
- */
+// Detects if an elevator is stuck and sets its online flag accordingly.
 func ElevatorStuck(elevator types.ElevatorState, errorChan chan string) {
 	timeSinceLastAction(elevator)
 	hasActiveCalls := false
@@ -386,9 +261,7 @@ var lastActionTime time.Time
 var prevFloor int
 var prevDirection elevio.MotorDirection
 
-/**
- * @brief Updates the lastActionTime of an elevator if it changes direction or floor.
- */
+// Updates the lastActionTime of an elevator if it changes direction or floor.
 func timeSinceLastAction(elevator types.ElevatorState) {
 	if elevator.GetFloor() != prevFloor || elevator.GetDirection() != prevDirection {
 		lastActionTime = time.Now()

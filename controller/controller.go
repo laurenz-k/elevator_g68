@@ -26,13 +26,14 @@ func StartControlLoop(elevatorID int, driverAddr string, numFloors int) {
 	assignmentEvents := make(chan elevio.ButtonEvent)
 	errorEvents := make(chan string)
 
-	asg.Init(elevatorID, assignmentEvents)
-
 	elevator := initializeElevator(elevatorID, driverAddr, numFloors)
 
-	sts.StartStatesync(elevator, buttonEvents, errorEvents)
+	asg.Init(_elevatorID, assignmentEvents)
+	sts.Init(elevator, buttonEvents, errorEvents)
 
 	// Start polling for events
+	go setButtonLights(elevator.requests)
+
 	go elevio.PollButtons(buttonEvents)
 	go elevio.PollFloorSensor(floorEvents)
 	go elevio.PollObstructionSwitch(obstructionEvents)
@@ -77,8 +78,6 @@ func initializeElevator(id int, driverAddr string, numFloors int) *elevator {
 
 	elevator.determineNextDirection(elevio.MD_Stop)
 	elevio.SetMotorDirection(elevator.direction)
-
-	updateCabButtonLights(elevator.requests)
 
 	if elevator.requests[elevator.floor][elevio.BT_Cab] {
 		elevator.openAndCloseDoor()
@@ -142,6 +141,7 @@ func (e *elevator) handleDoorObstruction(isObstructed bool, errorChan chan strin
 
 	if e.state == ST_DoorOpen {
 		e.doorObstructed = isObstructed
+		errorChan <- "Elevator obstructed normally"
 		return
 	} else {
 		errorChan <- "Door obstruction error"
@@ -176,8 +176,6 @@ func (e *elevator) addRequest(b elevio.ButtonEvent) {
 		e.requests[e.floor][elevio.BT_HallUp] = false
 		e.requests[e.floor][elevio.BT_HallDown] = false
 	}
-
-	updateCabButtonLights(e.requests)
 }
 
 func (e *elevator) openAndCloseDoor() {
@@ -189,8 +187,6 @@ func (e *elevator) openAndCloseDoor() {
 	elevio.SetDoorOpenLamp(true)
 
 	e.clearRequestsOnCurrentFloor(prevDirection)
-
-	updateCabButtonLights(e.requests)
 }
 
 func (e *elevator) shouldStopOnCurrentFloor() bool {
@@ -229,21 +225,25 @@ func hasRequestBelow(currFloor int, requests [][3]bool) bool {
 }
 
 func (e *elevator) clearRequestsOnCurrentFloor(d elevio.MotorDirection) {
-	delay := doorOpenDelay
+	delay := 0 * time.Second
 
 	// Clear cab requests
 	if e.requests[e.floor][elevio.BT_Cab] {
 		e.requests[e.floor][elevio.BT_Cab] = false
+		delay = doorOpenDelay
 	}
 
 	// Clear same direction hall calls
 	if d == elevio.MD_Up && e.requests[e.floor][elevio.BT_HallUp] {
 		e.requests[e.floor][elevio.BT_HallUp] = false
+		delay = doorOpenDelay
 	} else if d == elevio.MD_Down && e.requests[e.floor][elevio.BT_HallDown] {
 		e.requests[e.floor][elevio.BT_HallDown] = false
+		delay = doorOpenDelay
 	} else if d == elevio.MD_Stop {
 		e.requests[e.floor][elevio.BT_HallUp] = false
 		e.requests[e.floor][elevio.BT_HallDown] = false
+		delay = doorOpenDelay
 	}
 
 	flushRequests(e.requests)
@@ -275,6 +275,8 @@ func (e *elevator) clearOppositeDirectionRequests(d elevio.MotorDirection) {
 		e.determineNextDirection(d)
 
 		elevio.SetMotorDirection(e.direction)
+
+		sts.EnableHeartbeat()
 	})
 }
 
@@ -299,15 +301,28 @@ func (e *elevator) determineNextDirection(d elevio.MotorDirection) {
 	}
 }
 
-func updateCabButtonLights(requests [][3]bool) {
-	for f := 0; f < len(requests); f++ {
-		elevio.SetButtonLamp(elevio.BT_Cab, f, requests[f][elevio.BT_Cab])
+func setButtonLights(requests [][3]bool) {
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+
+	prevLights := make([][3]bool, len(requests))
+
+	for i := range prevLights {
+		for j := range prevLights[i] {
+			prevLights[i][j] = true
+		}
 	}
 
-	if len(sts.GetAliveElevatorIDs()) == 1 {
-		for f := 0; f < len(requests); f++ {
-			elevio.SetButtonLamp(elevio.BT_HallDown, f, requests[f][elevio.BT_HallDown])
-			elevio.SetButtonLamp(elevio.BT_HallUp, f, requests[f][elevio.BT_HallUp])
+	for range ticker.C {
+		currLights := sts.GetOrAggregatedLiveRequests(requests)
+
+		for r := range len(currLights) {
+			for b := range len(currLights[0]) {
+				if prevLights[r][b] != currLights[r][b] {
+					elevio.SetButtonLamp(elevio.ButtonType(b), r, currLights[r][b])
+					prevLights[r][b] = currLights[r][b]
+				}
+			}
 		}
 	}
 }
@@ -319,7 +334,7 @@ func (e *elevator) processElevatorErrors(errorChan chan string) {
 		case "Unexpected move", "Door open move":
 			e.handleUnexpectedMove()
 
-		case "Door obstruction error":
+		case "Door obstruction error", "Elevator obstructed normally":
 			e.handleDoorObstructionError()
 
 		case "Elevator stuck":
@@ -329,25 +344,26 @@ func (e *elevator) processElevatorErrors(errorChan chan string) {
 }
 
 func (e *elevator) handleUnexpectedMove() {
-	sts.TurnOffElevator(e.id)
+	sts.DisableHeartbeat()
 	if elevio.GetFloor() != -1 {
 		e.resetToIdle()
 	} else {
 		moveToNearestFloor()
 		e.openAndCloseDoor()
 	}
-	sts.TurnOnElevator(e.id)
+	sts.EnableHeartbeat()
 }
 
 func (e *elevator) handleDoorObstructionError() {
+	sts.DisableHeartbeat()
 	moveToNearestFloor()
 	e.openAndCloseDoor()
 }
 
 func (e *elevator) handleElevatorStuck() {
-	sts.TurnOffElevator(e.id)
+	sts.DisableHeartbeat()
 	moveToNearestFloor()
-	sts.TurnOnElevator(e.id)
+	sts.EnableHeartbeat()
 }
 
 func (e *elevator) resetToIdle() {

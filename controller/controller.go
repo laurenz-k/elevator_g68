@@ -23,7 +23,7 @@ func StartControlLoop(id int, driverAddr string, numFloors int) {
 
 	asg.Init(id, asg_buttons)
 
-	elevator := setup(id, driverAddr, numFloors)
+	elevator := initializeElevator(id, driverAddr, numFloors)
 
 	sts.StartStatesync(elevator, drv_buttons, error_chan)
 
@@ -32,7 +32,7 @@ func StartControlLoop(id int, driverAddr string, numFloors int) {
 	go elevio.PollObstructionSwitch(drv_obstr)
 	go elevio.PollStopButton(drv_stop)
 	go asg.ReceiveAssignments()
-	go elevator.handleErrors(error_chan)
+	go elevator.processElevatorErrors(error_chan)
 
 	for {
 		select {
@@ -54,7 +54,7 @@ func StartControlLoop(id int, driverAddr string, numFloors int) {
 	}
 }
 
-func setup(id int, driverAddr string, numFloors int) *elevator {
+func initializeElevator(id int, driverAddr string, numFloors int) *elevator {
 	elevio.Init(driverAddr, numFloors)
 
 	betweenFloors := elevio.GetFloor() == -1
@@ -76,10 +76,10 @@ func setup(id int, driverAddr string, numFloors int) *elevator {
 		doorObstructed: false,
 	}
 
-	elevator.setNextDirection(elevio.MD_Stop)
+	elevator.determineNextDirection(elevio.MD_Stop)
 	elevio.SetMotorDirection(elevator.direction)
 
-	setCabButtonLights(elevator.requests)
+	updateCabButtonLights(elevator.requests)
 
 	if elevator.requests[elevator.floor][elevio.BT_Cab] {
 		elevator.openAndCloseDoor()
@@ -114,7 +114,7 @@ func (e *elevator) handleFloorChange(floorNum int, errorChan chan string) {
 		e.floor = floorNum
 		elevio.SetFloorIndicator(floorNum)
 
-		if e.stopOnCurrentFloor() {
+		if e.shouldStopOnCurrentFloor() {
 			e.openAndCloseDoor()
 		}
 
@@ -167,7 +167,7 @@ func (e *elevator) addRequest(b elevio.ButtonEvent) {
 		e.requests[e.floor][elevio.BT_HallDown] = false
 	}
 
-	setCabButtonLights(e.requests)
+	updateCabButtonLights(e.requests)
 }
 
 func (e *elevator) openAndCloseDoor() {
@@ -178,12 +178,12 @@ func (e *elevator) openAndCloseDoor() {
 
 	elevio.SetDoorOpenLamp(true)
 
-	e.clearFloorRequests(prevDirection)
+	e.clearRequestsOnCurrentFloor(prevDirection)
 
-	setCabButtonLights(e.requests)
+	updateCabButtonLights(e.requests)
 }
 
-func (e *elevator) stopOnCurrentFloor() bool {
+func (e *elevator) shouldStopOnCurrentFloor() bool {
 	if e.direction == elevio.MD_Up {
 		return (e.requests[e.floor][elevio.BT_Cab] ||
 			e.requests[e.floor][elevio.BT_HallUp] ||
@@ -218,7 +218,7 @@ func hasRequestBelow(currFloor int, requests [][3]bool) bool {
 	return false
 }
 
-func (e *elevator) clearFloorRequests(d elevio.MotorDirection) {
+func (e *elevator) clearRequestsOnCurrentFloor(d elevio.MotorDirection) {
 	delay := 0 * time.Second
 	// cab requests
 	if e.requests[e.floor][elevio.BT_Cab] {
@@ -244,11 +244,11 @@ func (e *elevator) clearFloorRequests(d elevio.MotorDirection) {
 		delay = 3 * time.Second
 	}
 	time.AfterFunc(delay, func() {
-		e.clearOtherFloorRequests(d)
+		e.clearOppositeDirectionRequests(d)
 	})
 }
 
-func (e *elevator) clearOtherFloorRequests(d elevio.MotorDirection) {
+func (e *elevator) clearOppositeDirectionRequests(d elevio.MotorDirection) {
 	delay := 0 * time.Second
 	if d == elevio.MD_Up && !hasRequestAbove(e.floor, e.requests) {
 		if e.requests[e.floor][elevio.BT_HallDown] {
@@ -267,14 +267,14 @@ func (e *elevator) clearOtherFloorRequests(d elevio.MotorDirection) {
 		}
 		elevio.SetDoorOpenLamp(false)
 
-		e.setNextDirection(d)
+		e.determineNextDirection(d)
 
 		elevio.SetMotorDirection(e.direction)
 	})
 }
 
 // TODO make a pure function?
-func (e *elevator) setNextDirection(d elevio.MotorDirection) {
+func (e *elevator) determineNextDirection(d elevio.MotorDirection) {
 	// keeps same direction as long as there's requests in same direction left
 	if d == elevio.MD_Up && hasRequestAbove(e.floor, e.requests) {
 		e.state = ST_Moving
@@ -294,7 +294,7 @@ func (e *elevator) setNextDirection(d elevio.MotorDirection) {
 	}
 }
 
-func setCabButtonLights(requests [][3]bool) {
+func updateCabButtonLights(requests [][3]bool) {
 	for f := 0; f < len(requests); f++ {
 		elevio.SetButtonLamp(elevio.BT_Cab, f, requests[f][elevio.BT_Cab])
 	}
@@ -307,7 +307,7 @@ func setCabButtonLights(requests [][3]bool) {
 	}
 }
 
-func (e *elevator) handleErrors(errorChan chan string) {
+func (e *elevator) processElevatorErrors(errorChan chan string) {
 	myID := e.id
 	for {
 		err := <-errorChan

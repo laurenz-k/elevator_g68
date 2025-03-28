@@ -34,8 +34,8 @@ We are considering adapting the reassignment scheme such that first an elevator 
 ## FAT Commands
 - `elevatorserver`
 - `go run main.go -id <n>` where n=0..
-- `sudo packetloss -p 20068,15001 -r 0.6` to set up packetloss on our ports
-- `sudo netimpair -p 20068,15001 -r heavy`
+- `sudo packetloss -p 49235,49234 -r 0.6` to set up packetloss on our ports
+- `sudo netimpair -p 49235,49234 -r heavy`
 
 ## Working versions
 - 6f1763f27cbcdb8bf35f7233210e22589891f549 tested 25.3.25

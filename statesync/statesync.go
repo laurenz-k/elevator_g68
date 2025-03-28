@@ -11,9 +11,11 @@ import (
 )
 
 const broadcastAddr = "255.255.255.255"
-const broadcastPort = "15001"
+const broadcastPort = "49234"
 const interval = 25 * time.Millisecond
 const syncTimeout = 3 * time.Second
+
+// we go offline =>
 
 var mtx sync.RWMutex
 var states = make([]*elevatorState, 0, 10)
@@ -71,58 +73,65 @@ func TurnOffElevator(elevatorID int) {
  * @param elevatorPtr The current state of the elevator to broadcast.
  */
 func broadcastState(elevatorPtr types.ElevatorState) {
+	var conn net.Conn
+
+	for {
+		var err error
+		addr := broadcastAddr + ":" + broadcastPort
+		conn, err = net.Dial("udp", addr)
+		if err == nil {
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
+	defer conn.Close()
+
+	var myState elevatorState
+	nonce := 0
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for range ticker.C {
-		addr := broadcastAddr + ":" + broadcastPort
-		conn, err := net.Dial("udp", addr)
-		if err != nil {
-			log.Printf("Error dialing UDP: %v", err)
+		if offline {
 			continue
 		}
+		myState.id = elevatorPtr.GetID()
+		myState.nonce = nonce
+		myState.currFloor = elevatorPtr.GetFloor()
+		myState.currDirection = elevatorPtr.GetDirection()
+		myState.request = elevatorPtr.GetRequests()
 
-		defer conn.Close()
+		nonce++
 
-		var myState elevatorState
-		nonce := 0
-
-		for range ticker.C {
-			if offline {
-				continue
-			}
-			myState.id = elevatorPtr.GetID()
-			myState.nonce = nonce
-			myState.currFloor = elevatorPtr.GetFloor()
-			myState.currDirection = elevatorPtr.GetDirection()
-			myState.request = elevatorPtr.GetRequests()
-
-			nonce++
-
-			_, err = conn.Write(serialize(myState))
-
-			if err != nil {
-				break
-			}
-		}
+		conn.Write(serialize(myState))
 	}
+
 }
 
 /**
  * @brief Listens for incoming elevator states over UDP and updates local states.
  */
 func receiveStates() {
-	addr, _ := net.ResolveUDPAddr("udp", ":"+broadcastPort)
-	conn, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		log.Printf("Error dialing UDP in reciveStates: %v", err)
-		return
+	var conn *net.UDPConn
+
+	for {
+		var err error
+		addr, _ := net.ResolveUDPAddr("udp", broadcastAddr+":"+broadcastPort)
+		conn, err = net.ListenUDP("udp", addr)
+
+		if err == nil {
+			break
+		}
+		time.Sleep(1 * time.Second)
 	}
 	defer conn.Close()
 
 	buf := make([]byte, 1024)
 	for {
-		n, _ := conn.Read(buf)
+		n, err := conn.Read(buf)
+		if err != nil {
+			continue
+		}
 		stateMsg := deserialize(buf[:n])
 		stateMsg.lastSync = time.Now()
 

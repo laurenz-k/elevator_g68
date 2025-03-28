@@ -129,16 +129,11 @@ func (e *elevator) handleFloorChange(floorNum int, errorChan chan string) {
 func (e *elevator) handleDoorObstruction(isObstructed bool, errorChan chan string) {
 	log.Printf("Door obstruction %+v\n", isObstructed)
 
-	switch e.state {
-	case ST_DoorOpen:
+	if e.state == ST_DoorOpen {
 		e.doorObstructed = isObstructed
-	case ST_Moving:
-		errorChan <- "Door obstruction moving"
-		log.Printf("Stuck in Door obstruction error moving")
-		e.doorObstructed = isObstructed
-	case ST_Idle:
-		errorChan <- "Door obstruction idle"
-		log.Printf("Stuck in Door obstruction error idle")
+		return
+	} else {
+		errorChan <- "Door obstruction error"
 		e.doorObstructed = isObstructed
 	}
 }
@@ -328,19 +323,10 @@ func (e *elevator) handleErrors(errorChan chan string) {
 				e.openAndCloseDoor()
 				sts.TurnOnElevator(myID)
 			}
-		case "Door obstruction moving":
-			sts.TurnOffElevator(myID)
-			if elevio.GetFloor() != -1 {
-				elevio.SetMotorDirection(elevio.MD_Stop)
-			} else {
-				elevio.SetMotorDirection(elevio.MD_Down)
-				for elevio.GetFloor() == -1 {
-					time.Sleep(20 * time.Millisecond)
-				}
+		case "Door obstruction error":
+			for elevio.GetFloor() == -1 {
+				time.Sleep(20 * time.Millisecond)
 			}
-			e.openAndCloseDoor()
-			sts.TurnOnElevator(myID)
-		case "Door obstruction idle":
 			e.openAndCloseDoor()
 		case "Elevator stuck":
 			sts.TurnOffElevator(myID)

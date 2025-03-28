@@ -73,41 +73,41 @@ func TurnOffElevator(elevatorID int) {
  * @param elevatorPtr The current state of the elevator to broadcast.
  */
 func broadcastState(elevatorPtr types.ElevatorState) {
+	var conn net.Conn
+	var err error
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for range ticker.C {
 		addr := broadcastAddr + ":" + broadcastPort
-		conn, err := net.Dial("udp", addr)
-		if err != nil {
+		conn, err = net.Dial("udp", addr)
+		if err == nil {
+			break
+		} else {
 			log.Printf("Error dialing UDP: %v", err)
-			continue
-		}
-
-		defer conn.Close()
-
-		var myState elevatorState
-		nonce := 0
-
-		for range ticker.C {
-			if offline {
-				continue
-			}
-			myState.id = elevatorPtr.GetID()
-			myState.nonce = nonce
-			myState.currFloor = elevatorPtr.GetFloor()
-			myState.currDirection = elevatorPtr.GetDirection()
-			myState.request = elevatorPtr.GetRequests()
-
-			nonce++
-
-			_, err = conn.Write(serialize(myState))
-
-			if err != nil {
-				break
-			}
 		}
 	}
+
+	defer conn.Close()
+
+	var myState elevatorState
+	nonce := 0
+
+	for range ticker.C {
+		if offline {
+			continue
+		}
+		myState.id = elevatorPtr.GetID()
+		myState.nonce = nonce
+		myState.currFloor = elevatorPtr.GetFloor()
+		myState.currDirection = elevatorPtr.GetDirection()
+		myState.request = elevatorPtr.GetRequests()
+
+		nonce++
+
+		conn.Write(serialize(myState))
+	}
+
 }
 
 /**

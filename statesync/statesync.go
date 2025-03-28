@@ -223,7 +223,6 @@ func GetAliveElevatorIDs() []int {
 	defer mtx.RUnlock()
 
 	alive := make([]int, 0, len(states))
-	alive = append(alive, thisElevatorID)
 
 	for id, s := range states {
 		if s != nil {
@@ -231,6 +230,7 @@ func GetAliveElevatorIDs() []int {
 		}
 	}
 	log.Printf("Alive elevators: %v", alive)
+	alive = append(alive, thisElevatorID)
 	return alive
 }
 

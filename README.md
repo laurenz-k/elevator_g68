@@ -39,3 +39,4 @@ We are considering adapting the reassignment scheme such that first an elevator 
 
 ## Working versions
 - 6f1763f27cbcdb8bf35f7233210e22589891f549 tested 25.3.25
+- d06d6dc6bb1c62c41f712f3ff56938ed811313ba

@@ -150,6 +150,12 @@ func cost(call elevio.ButtonEvent) int {
 					cost += 5
 				}
 			}
+		} else { //Checks all calls if the elevator is not moving
+			for i := 0; i < len(requests[:][1])-1; i++ { //Iterates from floor above you to the top floor
+				if requests[i][0] || requests[i][1] || requests[i][2] { //Checks for cab calls or hall calls at the floor and associates cost with it
+					cost += 5
+				}
+			}
 		}
 
 		if cost < lowestcost {

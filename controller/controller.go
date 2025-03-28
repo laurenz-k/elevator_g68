@@ -251,11 +251,15 @@ func (e *elevator) clearFloorRequests(d elevio.MotorDirection) {
 func (e *elevator) clearOtherFloorRequests(d elevio.MotorDirection) {
 	delay := 0 * time.Second
 	if d == elevio.MD_Up && !hasRequestAbove(e.floor, e.requests) {
-		e.requests[e.floor][elevio.BT_HallDown] = false
-		delay = 3 * time.Second
+		if e.requests[e.floor][elevio.BT_HallDown] {
+			e.requests[e.floor][elevio.BT_HallDown] = false
+			delay = 3 * time.Second
+		}
 	} else if d == elevio.MD_Down && !hasRequestBelow(e.floor, e.requests) {
-		e.requests[e.floor][elevio.BT_HallUp] = false
-		delay = 3 * time.Second
+		if e.requests[e.floor][elevio.BT_HallUp] {
+			e.requests[e.floor][elevio.BT_HallUp] = false
+			delay = 3 * time.Second
+		}
 	}
 	time.AfterFunc(delay, func() {
 		for e.doorObstructed {

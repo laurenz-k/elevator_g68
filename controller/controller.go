@@ -86,6 +86,7 @@ func initializeElevator(id int, driverAddr string, numFloors int) *elevator {
 	return elevator
 }
 
+// moves up until a floor is found
 func moveToNearestFloor() {
 	if elevio.GetFloor() == -1 {
 		elevio.SetMotorDirection(elevio.MD_Up)
@@ -178,6 +179,7 @@ func (e *elevator) addRequest(b elevio.ButtonEvent) {
 	}
 }
 
+// Opens the door and waits for all passengers to enter/exit before closing
 func (e *elevator) openAndCloseDoor() {
 	prevDirection := e.direction
 	e.state = ST_DoorOpen
@@ -279,7 +281,6 @@ func (e *elevator) clearOppositeDirectionRequests(d elevio.MotorDirection) {
 		sts.EnableHeartbeat()
 	})
 }
-
 
 func (e *elevator) determineNextDirection(d elevio.MotorDirection) {
 	// keeps same direction as long as there's requests in same direction left
